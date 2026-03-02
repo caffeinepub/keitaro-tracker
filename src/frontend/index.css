@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/assets/fonts/CabinetGrotesk-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/assets/fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Figtree";
+  src: url("/assets/fonts/Figtree-Variable.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.375rem;
+
+    /* Dark-only design - professional data analytics */
+    --background: 0.13 0.008 250;
+    --foreground: 0.92 0.01 250;
+    --card: 0.17 0.01 250;
+    --card-foreground: 0.92 0.01 250;
+    --popover: 0.18 0.012 250;
+    --popover-foreground: 0.92 0.01 250;
+    --primary: 0.72 0.18 145;
+    --primary-foreground: 0.1 0.02 145;
+    --secondary: 0.22 0.012 250;
+    --secondary-foreground: 0.82 0.01 250;
+    --muted: 0.2 0.01 250;
+    --muted-foreground: 0.55 0.01 250;
+    --accent: 0.24 0.015 250;
+    --accent-foreground: 0.92 0.01 250;
+    --destructive: 0.62 0.22 25;
+    --destructive-foreground: 0.97 0.01 25;
+    --border: 0.28 0.012 250;
+    --input: 0.22 0.012 250;
+    --ring: 0.72 0.18 145;
+
+    /* Chart colors */
+    --chart-1: 0.72 0.18 145;
+    --chart-2: 0.65 0.19 230;
+    --chart-3: 0.7 0.19 55;
+    --chart-4: 0.68 0.2 310;
+    --chart-5: 0.65 0.22 15;
+
+    /* Sidebar */
+    --sidebar: 0.11 0.01 250;
+    --sidebar-foreground: 0.82 0.01 250;
+    --sidebar-primary: 0.72 0.18 145;
+    --sidebar-primary-foreground: 0.1 0.02 145;
+    --sidebar-accent: 0.18 0.012 250;
+    --sidebar-accent-foreground: 0.92 0.01 250;
+    --sidebar-border: 0.22 0.012 250;
+    --sidebar-ring: 0.72 0.18 145;
+
+    /* Custom tokens */
+    --success: 0.72 0.18 145;
+    --warning: 0.78 0.19 75;
+    --info: 0.65 0.19 230;
+    --emerald: 0.72 0.18 145;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Figtree", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Cabinet Grotesk", system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  code, pre, .mono {
+    font-family: "Geist Mono", monospace;
+  }
+}
+
+@layer utilities {
+  .text-success {
+    color: oklch(var(--success));
+  }
+  .text-warning {
+    color: oklch(var(--warning));
+  }
+  .text-info {
+    color: oklch(var(--info));
+  }
+  .bg-success {
+    background-color: oklch(var(--success));
+  }
+  .bg-success\/10 {
+    background-color: oklch(var(--success) / 0.1);
+  }
+  .bg-warning\/10 {
+    background-color: oklch(var(--warning) / 0.1);
+  }
+  .bg-info\/10 {
+    background-color: oklch(var(--info) / 0.1);
+  }
+  .border-success\/20 {
+    border-color: oklch(var(--success) / 0.2);
+  }
+  .border-warning\/20 {
+    border-color: oklch(var(--warning) / 0.2);
+  }
+  .border-info\/20 {
+    border-color: oklch(var(--info) / 0.2);
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
