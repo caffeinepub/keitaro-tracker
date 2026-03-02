@@ -39,6 +39,7 @@ import {
   useGetAllTrafficSources,
   useUpdateTrafficSource,
 } from "../hooks/useQueries";
+import { getCreatorByEntityId } from "../utils/activityLog";
 
 function getCostModelBadge(model: CostModel) {
   const colors: Record<CostModel, string> = {
@@ -312,8 +313,9 @@ export default function TrafficSourcesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
+    const ts = trafficSources?.find((s) => s.id === id);
     try {
-      await deleteTS.mutateAsync(id);
+      await deleteTS.mutateAsync({ id, name: ts?.name ?? id });
       toast.success("Traffic source deleted");
       setDeletingId(null);
     } catch {
@@ -381,6 +383,9 @@ export default function TrafficSourcesPage() {
                 <TableHead className="text-xs font-medium text-muted-foreground text-center">
                   Params
                 </TableHead>
+                <TableHead className="text-xs font-medium text-muted-foreground">
+                  Created by
+                </TableHead>
                 <TableHead className="text-xs font-medium text-muted-foreground text-right pr-5">
                   Actions
                 </TableHead>
@@ -390,7 +395,7 @@ export default function TrafficSourcesPage() {
               {!trafficSources || trafficSources.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="text-center py-16 text-muted-foreground"
                   >
                     <div className="flex flex-col items-center gap-2">
@@ -425,6 +430,11 @@ export default function TrafficSourcesPage() {
                       <Badge variant="outline" className="text-xs">
                         {ts.parameters.length}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {getCreatorByEntityId(ts.id) ?? (
+                        <span className="text-muted-foreground/40">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right pr-5">
                       <div className="flex items-center justify-end gap-1">

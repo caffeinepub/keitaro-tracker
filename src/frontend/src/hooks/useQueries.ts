@@ -19,6 +19,7 @@ import type {
   TrafficSource,
   UserProfile,
 } from "../backend.d";
+import { getCurrentActor, logActivity } from "../utils/activityLog";
 import { useAdminActor as useActor } from "./useAdminActor";
 
 // ── User Profile ──────────────────────────────────────────────────────────────
@@ -28,8 +29,13 @@ export function useGetCallerUserProfile() {
   const query = useQuery<UserProfile | null>({
     queryKey: ["currentUserProfile"],
     queryFn: async () => {
-      if (!actor) throw new Error("Actor not available");
-      return actor.getCallerUserProfile();
+      if (!actor) return null;
+      try {
+        return await actor.getCallerUserProfile();
+      } catch {
+        // Silently ignore auth errors (e.g. anonymous users)
+        return null;
+      }
     },
     enabled: !!actor && !actorFetching,
     retry: false,
@@ -89,7 +95,14 @@ export function useCreateCampaign() {
         args.trackingDomain,
       );
     },
-    onSuccess: () => {
+    onSuccess: (campaign) => {
+      logActivity(
+        getCurrentActor(),
+        "Created",
+        "Campaign",
+        campaign.id,
+        campaign.name,
+      );
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
       queryClient.invalidateQueries({ queryKey: ["campaignStats"] });
     },
@@ -118,7 +131,14 @@ export function useUpdateCampaign() {
         args.trackingDomain,
       );
     },
-    onSuccess: () => {
+    onSuccess: (campaign) => {
+      logActivity(
+        getCurrentActor(),
+        "Updated",
+        "Campaign",
+        campaign.id,
+        campaign.name,
+      );
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
       queryClient.invalidateQueries({ queryKey: ["campaignStats"] });
     },
@@ -129,11 +149,12 @@ export function useDeleteCampaign() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (args: { id: string; name: string }) => {
       if (!actor) throw new Error("Actor not available");
-      return actor.deleteCampaign(id);
+      return actor.deleteCampaign(args.id);
     },
-    onSuccess: () => {
+    onSuccess: (_, args) => {
+      logActivity(getCurrentActor(), "Deleted", "Campaign", args.id, args.name);
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
       queryClient.invalidateQueries({ queryKey: ["campaignStats"] });
     },
@@ -174,7 +195,8 @@ export function useCreateOffer() {
         args.status,
       );
     },
-    onSuccess: () => {
+    onSuccess: (offer) => {
+      logActivity(getCurrentActor(), "Created", "Offer", offer.id, offer.name);
       queryClient.invalidateQueries({ queryKey: ["offers"] });
     },
   });
@@ -202,7 +224,8 @@ export function useUpdateOffer() {
         args.status,
       );
     },
-    onSuccess: () => {
+    onSuccess: (offer) => {
+      logActivity(getCurrentActor(), "Updated", "Offer", offer.id, offer.name);
       queryClient.invalidateQueries({ queryKey: ["offers"] });
     },
   });
@@ -212,11 +235,12 @@ export function useDeleteOffer() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (args: { id: string; name: string }) => {
       if (!actor) throw new Error("Actor not available");
-      return actor.deleteOffer(id);
+      return actor.deleteOffer(args.id);
     },
-    onSuccess: () => {
+    onSuccess: (_, args) => {
+      logActivity(getCurrentActor(), "Deleted", "Offer", args.id, args.name);
       queryClient.invalidateQueries({ queryKey: ["offers"] });
     },
   });
@@ -254,7 +278,14 @@ export function useCreateTrafficSource() {
         args.parameters,
       );
     },
-    onSuccess: () => {
+    onSuccess: (ts) => {
+      logActivity(
+        getCurrentActor(),
+        "Created",
+        "Traffic Source",
+        ts.id,
+        ts.name,
+      );
       queryClient.invalidateQueries({ queryKey: ["trafficSources"] });
     },
   });
@@ -280,7 +311,14 @@ export function useUpdateTrafficSource() {
         args.parameters,
       );
     },
-    onSuccess: () => {
+    onSuccess: (ts) => {
+      logActivity(
+        getCurrentActor(),
+        "Updated",
+        "Traffic Source",
+        ts.id,
+        ts.name,
+      );
       queryClient.invalidateQueries({ queryKey: ["trafficSources"] });
     },
   });
@@ -290,11 +328,18 @@ export function useDeleteTrafficSource() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (args: { id: string; name: string }) => {
       if (!actor) throw new Error("Actor not available");
-      return actor.deleteTrafficSource(id);
+      return actor.deleteTrafficSource(args.id);
     },
-    onSuccess: () => {
+    onSuccess: (_, args) => {
+      logActivity(
+        getCurrentActor(),
+        "Deleted",
+        "Traffic Source",
+        args.id,
+        args.name,
+      );
       queryClient.invalidateQueries({ queryKey: ["trafficSources"] });
     },
   });
@@ -326,7 +371,8 @@ export function useCreateFlow() {
       if (!actor) throw new Error("Actor not available");
       return actor.createFlow(args.name, args.campaignId, args.rules);
     },
-    onSuccess: () => {
+    onSuccess: (flow) => {
+      logActivity(getCurrentActor(), "Created", "Flow", flow.id, flow.name);
       queryClient.invalidateQueries({ queryKey: ["flows"] });
     },
   });
@@ -345,7 +391,8 @@ export function useUpdateFlow() {
       if (!actor) throw new Error("Actor not available");
       return actor.updateFlow(args.id, args.name, args.campaignId, args.rules);
     },
-    onSuccess: () => {
+    onSuccess: (flow) => {
+      logActivity(getCurrentActor(), "Updated", "Flow", flow.id, flow.name);
       queryClient.invalidateQueries({ queryKey: ["flows"] });
     },
   });
@@ -355,11 +402,12 @@ export function useDeleteFlow() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (args: { id: string; name: string }) => {
       if (!actor) throw new Error("Actor not available");
-      return actor.deleteFlow(id);
+      return actor.deleteFlow(args.id);
     },
-    onSuccess: () => {
+    onSuccess: (_, args) => {
+      logActivity(getCurrentActor(), "Deleted", "Flow", args.id, args.name);
       queryClient.invalidateQueries({ queryKey: ["flows"] });
     },
   });
@@ -391,7 +439,14 @@ export function useCreateDomain() {
       if (!actor) throw new Error("Actor not available");
       return actor.createDomain(args.name, args.domainType, args.status);
     },
-    onSuccess: () => {
+    onSuccess: (domain) => {
+      logActivity(
+        getCurrentActor(),
+        "Created",
+        "Domain",
+        domain.id,
+        domain.name,
+      );
       queryClient.invalidateQueries({ queryKey: ["domains"] });
     },
   });
@@ -415,7 +470,14 @@ export function useUpdateDomain() {
         args.status,
       );
     },
-    onSuccess: () => {
+    onSuccess: (domain) => {
+      logActivity(
+        getCurrentActor(),
+        "Updated",
+        "Domain",
+        domain.id,
+        domain.name,
+      );
       queryClient.invalidateQueries({ queryKey: ["domains"] });
     },
   });
@@ -425,11 +487,12 @@ export function useDeleteDomain() {
   const { actor } = useActor();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (args: { id: string; name: string }) => {
       if (!actor) throw new Error("Actor not available");
-      return actor.deleteDomain(id);
+      return actor.deleteDomain(args.id);
     },
-    onSuccess: () => {
+    onSuccess: (_, args) => {
+      logActivity(getCurrentActor(), "Deleted", "Domain", args.id, args.name);
       queryClient.invalidateQueries({ queryKey: ["domains"] });
     },
   });

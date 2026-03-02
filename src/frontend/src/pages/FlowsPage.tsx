@@ -503,8 +503,9 @@ export default function FlowsPage() {
     : {};
 
   const handleDelete = async (id: string) => {
+    const flow = flows?.find((f) => f.id === id);
     try {
-      await deleteFlow.mutateAsync(id);
+      await deleteFlow.mutateAsync({ id, name: flow?.name ?? id });
       toast.success("Flow deleted");
       setDeletingId(null);
     } catch {

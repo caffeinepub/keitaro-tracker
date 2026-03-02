@@ -38,6 +38,7 @@ import {
   useGetAllOffers,
   useUpdateOffer,
 } from "../hooks/useQueries";
+import { getCreatorByEntityId } from "../utils/activityLog";
 
 function getStatusBadge(status: OfferStatus) {
   return status === OfferStatus.active ? (
@@ -214,8 +215,9 @@ export default function OffersPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
+    const offer = offers?.find((o) => o.id === id);
     try {
-      await deleteOffer.mutateAsync(id);
+      await deleteOffer.mutateAsync({ id, name: offer?.name ?? id });
       toast.success("Offer deleted");
       setDeletingId(null);
     } catch {
@@ -284,6 +286,9 @@ export default function OffersPage() {
                 <TableHead className="text-xs font-medium text-muted-foreground">
                   Status
                 </TableHead>
+                <TableHead className="text-xs font-medium text-muted-foreground">
+                  Created by
+                </TableHead>
                 <TableHead className="text-xs font-medium text-muted-foreground text-right pr-5">
                   Actions
                 </TableHead>
@@ -293,7 +298,7 @@ export default function OffersPage() {
               {!offers || offers.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-16 text-muted-foreground"
                   >
                     <div className="flex flex-col items-center gap-2">
@@ -322,6 +327,11 @@ export default function OffersPage() {
                     </TableCell>
                     <TableCell className="text-sm">{offer.currency}</TableCell>
                     <TableCell>{getStatusBadge(offer.status)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {getCreatorByEntityId(offer.id) ?? (
+                        <span className="text-muted-foreground/40">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right pr-5">
                       <div className="flex items-center justify-end gap-1">
                         <Button

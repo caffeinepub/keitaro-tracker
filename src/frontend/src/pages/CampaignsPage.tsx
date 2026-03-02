@@ -42,6 +42,7 @@ import {
   useGetCampaignStats,
   useUpdateCampaign,
 } from "../hooks/useQueries";
+import { getCreatorByEntityId } from "../utils/activityLog";
 
 interface OfferWeightRow {
   _key: number;
@@ -352,8 +353,9 @@ export default function CampaignsPage() {
     : {};
 
   const handleDelete = async (id: string) => {
+    const campaign = campaigns?.find((c) => c.id === id);
     try {
-      await deleteCampaign.mutateAsync(id);
+      await deleteCampaign.mutateAsync({ id, name: campaign?.name ?? id });
       toast.success("Campaign deleted");
       setDeletingId(null);
     } catch {
@@ -452,6 +454,9 @@ export default function CampaignsPage() {
                 <TableHead className="text-xs font-medium text-muted-foreground text-right">
                   Revenue
                 </TableHead>
+                <TableHead className="text-xs font-medium text-muted-foreground">
+                  Created by
+                </TableHead>
                 <TableHead className="text-xs font-medium text-muted-foreground text-right pr-5">
                   Actions
                 </TableHead>
@@ -461,7 +466,7 @@ export default function CampaignsPage() {
               {!campaigns || campaigns.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center py-16 text-muted-foreground"
                   >
                     <div className="flex flex-col items-center gap-2">
@@ -498,6 +503,11 @@ export default function CampaignsPage() {
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm text-success">
                         {s ? `$${(Number(s.revenue) / 100).toFixed(2)}` : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {getCreatorByEntityId(campaign.id) ?? (
+                          <span className="text-muted-foreground/40">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right pr-5">
                         <div className="flex items-center justify-end gap-1">

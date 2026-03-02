@@ -31,7 +31,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Copy, Globe, Info, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Copy,
+  Globe,
+  Info,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -96,15 +104,36 @@ interface DnsPopoverProps {
   domain: Domain;
 }
 
+function getDomainTypeDescription(type: DomainType): string {
+  switch (type) {
+    case DomainType.campaign:
+      return "Used for campaign tracking links — visitors will be redirected through this domain.";
+    case DomainType.postback:
+      return "Used for conversion postback URLs — affiliate networks will send conversion data to this domain.";
+    case DomainType.admin:
+      return "Used for admin panel access — you can log in to KTracker via this domain.";
+  }
+}
+
 function DnsPopover({ domain }: DnsPopoverProps) {
   const host = window.location.hostname;
-  const cnameValue = host;
+  const cnameTarget = host;
+
+  // Extract subdomain part (e.g. "track" from "track.example.com")
+  const subdomainPart = domain.name.split(".")[0];
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       toast.success("Copied to clipboard");
     });
   };
+
+  const steps = [
+    "Log in to your domain registrar (Cloudflare, Namecheap, GoDaddy, etc.)",
+    "Go to DNS settings for your domain",
+    "Add a new CNAME record (see values below)",
+    "Save and wait 5–60 minutes for DNS propagation",
+  ];
 
   return (
     <Popover>
@@ -118,41 +147,43 @@ function DnsPopover({ domain }: DnsPopoverProps) {
           <Info className="w-3.5 h-3.5" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-4" align="end">
-        <div className="space-y-3">
+      <PopoverContent className="w-96 p-4" align="end">
+        <div className="space-y-4">
+          {/* Header */}
           <div>
             <p className="text-sm font-semibold mb-1">
-              DNS Setup for {domain.name}
+              DNS Setup — {domain.name}
             </p>
             <p className="text-xs text-muted-foreground">
-              Add the following DNS record to your domain registrar:
+              {getDomainTypeDescription(domain.domainType)}
             </p>
           </div>
-          <div className="space-y-2">
-            <div className="rounded-md bg-muted/60 border border-border p-3 space-y-1.5">
+
+          {/* CNAME record box */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              DNS Record
+            </p>
+            <div className="rounded-md bg-muted/60 border border-border p-3 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground font-medium">
+                <span className="text-xs text-muted-foreground font-medium w-16">
                   Type
                 </span>
-                <span className="text-xs font-mono font-semibold">CNAME</span>
+                <span className="text-xs font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded">
+                  CNAME
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground font-medium">
-                  Name
+                <span className="text-xs text-muted-foreground font-medium w-16">
+                  Name / Host
                 </span>
-                <span className="text-xs font-mono">{domain.name}</span>
-              </div>
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-xs text-muted-foreground font-medium shrink-0">
-                  Value
-                </span>
-                <div className="flex items-center gap-1 min-w-0">
-                  <span className="text-xs font-mono truncate text-primary">
-                    {cnameValue}
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-mono font-semibold">
+                    {subdomainPart}
                   </span>
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(cnameValue)}
+                    onClick={() => copyToClipboard(subdomainPart)}
                     className="shrink-0 p-1 rounded hover:bg-accent transition-colors"
                     title="Copy"
                   >
@@ -160,11 +191,54 @@ function DnsPopover({ domain }: DnsPopoverProps) {
                   </button>
                 </div>
               </div>
+              <div className="flex justify-between items-center gap-2">
+                <span className="text-xs text-muted-foreground font-medium w-16 shrink-0">
+                  Value / Target
+                </span>
+                <div className="flex items-center gap-1 min-w-0 flex-1">
+                  <span className="text-xs font-mono truncate text-primary flex-1">
+                    {cnameTarget}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(cnameTarget)}
+                    className="shrink-0 p-1 rounded hover:bg-accent transition-colors"
+                    title="Copy CNAME target"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Alternatively, use an{" "}
-              <span className="font-semibold">A record</span> pointing to the
-              same host IP if CNAME is not supported at root level.
+            <p className="text-xs text-muted-foreground mt-2">
+              <span className="font-semibold text-foreground/70">Note:</span>{" "}
+              This CNAME target is the Internet Computer Protocol (ICP) canister
+              address where your tracker is hosted.
+            </p>
+          </div>
+
+          {/* Step-by-step guide */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Step-by-step guide
+            </p>
+            <ol className="space-y-1.5">
+              {steps.map((step) => (
+                <li key={step} className="flex items-start gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-xs text-muted-foreground">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Tip */}
+          <div className="rounded-md bg-info/10 border border-info/20 p-3">
+            <p className="text-xs text-info">
+              <span className="font-semibold">Tip:</span> Use Cloudflare for
+              faster DNS propagation and free SSL. Set the subdomain as{" "}
+              <span className="font-mono">{subdomainPart}</span> pointing to{" "}
+              <span className="font-mono">{cnameTarget}</span>.
             </p>
           </div>
         </div>
@@ -327,8 +401,9 @@ export default function DomainsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
+    const domain = domains?.find((d) => d.id === id);
     try {
-      await deleteDomain.mutateAsync(id);
+      await deleteDomain.mutateAsync({ id, name: domain?.name ?? id });
       toast.success("Domain removed");
       setDeletingId(null);
     } catch {

@@ -4,23 +4,28 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import Layout from "./components/Layout";
 import ProfileSetupModal from "./components/ProfileSetupModal";
+import { useEmailAuth } from "./contexts/EmailAuthContext";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useGetCallerUserProfile } from "./hooks/useQueries";
 
 export default function App() {
-  const { identity, isInitializing } = useInternetIdentity();
-  const isAuthenticated = !!identity;
+  const { identity, isInitializing: iiInitializing } = useInternetIdentity();
+  const { emailUser, isInitializing: emailInitializing } = useEmailAuth();
+  const queryClient = useQueryClient();
+  const [profileSetupDone, setProfileSetupDone] = useState(false);
+
+  const isInitializing = iiInitializing || emailInitializing;
 
   const {
     data: userProfile,
     isLoading: profileLoading,
     isFetched,
   } = useGetCallerUserProfile();
-  const queryClient = useQueryClient();
-  const [profileSetupDone, setProfileSetupDone] = useState(false);
 
+  // Only show profile setup for Internet Identity users
   const showProfileSetup =
-    isAuthenticated &&
+    !!identity &&
+    !emailUser &&
     !profileLoading &&
     isFetched &&
     userProfile === null &&
@@ -43,6 +48,7 @@ export default function App() {
     <>
       <Layout
         userProfile={userProfile}
+        emailUser={emailUser}
         onLogout={() => {
           queryClient.clear();
         }}
