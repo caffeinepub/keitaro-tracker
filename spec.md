@@ -2,30 +2,27 @@
 
 ## Current State
 
-KTracker is a Keitaro-like ad tracking platform with:
-- Traffic Sources, Offers, Campaigns, Flows, Domains management
-- Activity log (localStorage-based)
-- Email/password login (localStorage-based) + Internet Identity login
-- DNS setup instructions for domains
-- All backend write operations require admin role (isAdmin check)
-- The anonymous actor cannot get admin rights, so all create/update/delete calls fail with "Unauthorized"
+Full-stack tracker app (Motoko backend + React frontend). Campaigns are stored with a `campaignKey` field, but currently all campaigns are assigned `"static_key"` as their campaign key in `createCampaign()`. The tracking link format is `/#/click/:campaignKey` in the frontend hash routing.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new
+- `generateCampaignKey()` helper function in the backend that produces a 16-character unique alphanumeric string (lowercase letters + digits) per campaign using time + counter mixing
+- `migrateCampaignKeys()` public shared function that iterates all campaigns and replaces any that have `campaignKey == "static_key"` with a newly generated unique key
 
 ### Modify
-- Remove all authorization checks from backend write operations (createTrafficSource, updateTrafficSource, deleteTrafficSource, createOffer, updateOffer, deleteOffer, createCampaign, updateCampaign, deleteCampaign, createFlow, updateFlow, deleteFlow, createDomain, updateDomain, deleteDomain, initialize)
-- Remove authorization checks from read operations (getAllTrafficSources, getTrafficSource, getAllOffers, getOffer, getAllCampaigns, getCampaign, getAllFlows, getFlow, getAllDomains, getDomain, getAllDomainsByType, getCampaignStats, getClicksLog, getConversionsLog, getCallerUserProfile, getUserProfile, saveCallerUserProfile)
-- All operations should be open (no auth required) so both anonymous and authenticated users can perform CRUD
+- `createCampaign()`: replace hardcoded `"static_key"` with a call to `generateCampaignKey()`
+- Frontend hash routing in `Layout.tsx`: change the regex from `#/click/:key` to `#/click/:key` -- no change needed here, just ensure `ClickHandlerPage` receives the correct key
+- `getTrackingLink()` in `CampaignsPage.tsx`: keep the format `/#/click/:campaignKey` (no change needed, backend key will now be unique)
+- `getCampaignByKey()`: keep as-is (already works by campaignKey lookup)
 
 ### Remove
-- Nothing
+- Nothing removed
 
 ## Implementation Plan
 
-1. Regenerate Motoko backend with all auth checks removed from all operations
-2. Keep all data models and business logic the same
-3. Keep MixinAuthorization mixin (for isCallerAdmin, getCallerUserRole queries) but stop using it for access control on CRUD operations
-4. Frontend stays unchanged - the mutations already work correctly once the backend stops rejecting anonymous calls
+1. Add `var campaignKeyCounter : Nat = 0` state variable to backend
+2. Add `generateCampaignKey()` private function that mixes `Time.now()`, `idCounter`, and `campaignKeyCounter` to generate a 16-char alphanumeric string
+3. Update `createCampaign()` to call `generateCampaignKey()` instead of `"static_key"`
+4. Add `migrateCampaignKeys()` public shared function (no auth required so it can be called once) that finds all campaigns with `campaignKey == "static_key"` and updates them with unique generated keys
+5. Frontend: no structural changes needed -- tracking link format stays `/#/click/:campaignKey`, which already works correctly

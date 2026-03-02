@@ -175,29 +175,11 @@ export enum UserRole {
 }
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    /**
-     * / ************* Campaigns **************
-     */
     createCampaign(name: string, trafficSourceId: string, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
-    /**
-     * / ************* Domains **************
-     */
     createDomain(name: string, domainType: DomainType, status: DomainStatus): Promise<Domain>;
-    /**
-     * / ************* Flows **************
-     */
     createFlow(name: string, campaignId: string, rules: Array<RoutingRule>): Promise<Flow>;
-    /**
-     * / ************* Offers **************
-     */
     createOffer(name: string, url: string, payout: bigint, currency: string, status: OfferStatus): Promise<Offer>;
-    /**
-     * / ************* Streams **************
-     */
     createStream(name: string, campaignId: string, offerId: string, weight: bigint, state: StreamState, position: bigint): Promise<Stream>;
-    /**
-     * / ************* Traffic Sources **************
-     */
     createTrafficSource(name: string, postbackUrl: string, costModel: CostModel, parameters: Array<Parameter>): Promise<TrafficSource>;
     deleteCampaign(id: string): Promise<void>;
     deleteDomain(id: string): Promise<void>;
@@ -213,9 +195,6 @@ export interface backendInterface {
     getAllOffers(): Promise<Array<Offer>>;
     getAllStreams(): Promise<Array<Stream>>;
     getAllTrafficSources(): Promise<Array<TrafficSource>>;
-    /**
-     * / ************* User Profile Functions (Required by Frontend) **************
-     */
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCampaign(id: string): Promise<Campaign>;
@@ -235,33 +214,16 @@ export interface backendInterface {
     getStreamsByCampaign(campaignId: string): Promise<Array<Stream>>;
     getTrafficSource(id: string): Promise<TrafficSource>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
-    /**
-     * / ************* Initialization **************
-     */
     initialize(): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
-    /**
-     * / ************* Error Logging **************
-     */
     logError(context: string, message: string): Promise<void>;
     loginUser(email: string, passwordHash: string): Promise<string>;
     logoutUser(sessionToken: string): Promise<void>;
-    /**
-     * / ************* Process Clicks **************
-     */
+    migrateCampaignKeys(): Promise<bigint>;
     processClick(campaignKey: string, ipAddress: string, referrerUrl: string, landingPageUrl: string): Promise<ProcessClickResult>;
-    /**
-     * / ************* Process Postbacks **************
-     */
     processPostback(clickId: string, offerId: string, payout: number, status: ConversionStatus): Promise<ConversionEvent>;
-    /**
-     * / ************* Legacy Clicks **************
-     */
     recordClick(campaignId: string, ipAddress: string, country: string, city: string, os: string, browser: string, deviceType: string, referrerUrl: string, landingPageUrl: string): Promise<ClickEvent>;
     recordConversion(clickId: string, campaignId: string, offerId: string, payout: number, revenue: bigint, status: ConversionStatus): Promise<ConversionEvent>;
-    /**
-     * / ************* User Authentication **************
-     */
     registerFirstUser(email: string, passwordHash: string, displayName: string): Promise<string>;
     registerWithInvite(inviteToken: string, email: string, passwordHash: string, displayName: string): Promise<string>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;

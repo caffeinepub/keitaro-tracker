@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   AlertTriangle,
@@ -40,7 +41,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Campaign, Offer, Stream } from "../backend.d";
 import { CampaignStatus, DomainType } from "../backend.d";
@@ -56,6 +57,7 @@ import {
   useGetAllTrafficSources,
   useGetCampaignStats,
   useGetStreamsByCampaign,
+  useMigrateCampaignKeys,
   useUpdateCampaign,
   useUpdateStream,
 } from "../hooks/useQueries";
@@ -737,6 +739,21 @@ export default function CampaignsPage() {
   const { data: offers } = useGetAllOffers();
   const deleteCampaign = useDeleteCampaign();
   const updateCampaign = useUpdateCampaign();
+  const migrateCampaignKeys = useMigrateCampaignKeys();
+  const queryClient = useQueryClient();
+
+  // Auto-migrate old campaigns that still have "static_key" (run once on first load)
+  useEffect(() => {
+    if (!campaigns) return;
+    const hasLegacy = campaigns.some((c) => c.campaignKey === "static_key");
+    if (!hasLegacy) return;
+    const { mutate } = migrateCampaignKeys;
+    mutate(undefined, {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      },
+    });
+  }, [campaigns, migrateCampaignKeys, queryClient]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Campaign | undefined>();

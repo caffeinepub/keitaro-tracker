@@ -682,3 +682,15 @@ export function useGetErrorLog() {
     enabled: !!actor && !isFetching,
   });
 }
+
+// ── Migration ─────────────────────────────────────────────────────────────────
+
+export function useMigrateCampaignKeys() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async () => {
+      if (!actor) throw new Error("Actor not available");
+      return await actor.migrateCampaignKeys();
+    },
+  });
+}

@@ -160,38 +160,20 @@ export type UserRole = { 'admin' : null } |
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
-  /**
-   * / ************* Campaigns **************
-   */
   'createCampaign' : ActorMethod<
     [string, string, CampaignStatus, string],
     Campaign
   >,
-  /**
-   * / ************* Domains **************
-   */
   'createDomain' : ActorMethod<[string, DomainType, DomainStatus], Domain>,
-  /**
-   * / ************* Flows **************
-   */
   'createFlow' : ActorMethod<[string, string, Array<RoutingRule>], Flow>,
-  /**
-   * / ************* Offers **************
-   */
   'createOffer' : ActorMethod<
     [string, string, bigint, string, OfferStatus],
     Offer
   >,
-  /**
-   * / ************* Streams **************
-   */
   'createStream' : ActorMethod<
     [string, string, string, bigint, StreamState, bigint],
     Stream
   >,
-  /**
-   * / ************* Traffic Sources **************
-   */
   'createTrafficSource' : ActorMethod<
     [string, string, CostModel, Array<Parameter>],
     TrafficSource
@@ -210,9 +192,6 @@ export interface _SERVICE {
   'getAllOffers' : ActorMethod<[], Array<Offer>>,
   'getAllStreams' : ActorMethod<[], Array<Stream>>,
   'getAllTrafficSources' : ActorMethod<[], Array<TrafficSource>>,
-  /**
-   * / ************* User Profile Functions (Required by Frontend) **************
-   */
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCampaign' : ActorMethod<[string], Campaign>,
@@ -232,34 +211,20 @@ export interface _SERVICE {
   'getStreamsByCampaign' : ActorMethod<[string], Array<Stream>>,
   'getTrafficSource' : ActorMethod<[string], TrafficSource>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
-  /**
-   * / ************* Initialization **************
-   */
   'initialize' : ActorMethod<[], undefined>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
-  /**
-   * / ************* Error Logging **************
-   */
   'logError' : ActorMethod<[string, string], undefined>,
   'loginUser' : ActorMethod<[string, string], string>,
   'logoutUser' : ActorMethod<[string], undefined>,
-  /**
-   * / ************* Process Clicks **************
-   */
+  'migrateCampaignKeys' : ActorMethod<[], bigint>,
   'processClick' : ActorMethod<
     [string, string, string, string],
     ProcessClickResult
   >,
-  /**
-   * / ************* Process Postbacks **************
-   */
   'processPostback' : ActorMethod<
     [string, string, number, ConversionStatus],
     ConversionEvent
   >,
-  /**
-   * / ************* Legacy Clicks **************
-   */
   'recordClick' : ActorMethod<
     [string, string, string, string, string, string, string, string, string],
     ClickEvent
@@ -268,9 +233,6 @@ export interface _SERVICE {
     [string, string, string, number, bigint, ConversionStatus],
     ConversionEvent
   >,
-  /**
-   * / ************* User Authentication **************
-   */
   'registerFirstUser' : ActorMethod<[string, string, string], string>,
   'registerWithInvite' : ActorMethod<[string, string, string, string], string>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,

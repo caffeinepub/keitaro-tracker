@@ -257,6 +257,7 @@ export const idlService = IDL.Service({
   'logError' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'loginUser' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
   'logoutUser' : IDL.Func([IDL.Text], [], []),
+  'migrateCampaignKeys' : IDL.Func([], [IDL.Nat], []),
   'processClick' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [ProcessClickResult],
@@ -587,6 +588,7 @@ export const idlFactory = ({ IDL }) => {
     'logError' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'loginUser' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
     'logoutUser' : IDL.Func([IDL.Text], [], []),
+    'migrateCampaignKeys' : IDL.Func([], [IDL.Nat], []),
     'processClick' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [ProcessClickResult],
