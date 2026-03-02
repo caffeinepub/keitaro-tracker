@@ -552,13 +552,21 @@ interface CampaignFormProps {
   open: boolean;
   onClose: () => void;
   editingCampaign?: Campaign;
+  onCreated?: (campaign: Campaign) => void;
 }
 
-function CampaignForm({ open, onClose, editingCampaign }: CampaignFormProps) {
+function CampaignForm({
+  open,
+  onClose,
+  editingCampaign,
+  onCreated,
+}: CampaignFormProps) {
   const { data: trafficSources } = useGetAllTrafficSources();
   const { data: domains } = useGetAllDomains();
+  const { data: allOffers } = useGetAllOffers();
   const createCampaign = useCreateCampaign();
   const updateCampaign = useUpdateCampaign();
+  const createStream = useCreateStream();
 
   const campaignDomains =
     domains?.filter((d) => d.domainType === DomainType.campaign) ?? [];
@@ -573,6 +581,13 @@ function CampaignForm({ open, onClose, editingCampaign }: CampaignFormProps) {
   const [trackingDomain, setTrackingDomain] = useState(
     editingCampaign?.trackingDomain || "__default__",
   );
+
+  // Step 2 state (stream creation after campaign created)
+  const [step, setStep] = useState<1 | 2>(1);
+  const [createdCampaign, setCreatedCampaign] = useState<Campaign | null>(null);
+  const [streamOfferId, setStreamOfferId] = useState("");
+  const [streamName, setStreamName] = useState("Main Stream");
+  const [streamWeight, setStreamWeight] = useState(100);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -596,17 +611,24 @@ function CampaignForm({ open, onClose, editingCampaign }: CampaignFormProps) {
             trackingDomain === "__default__" ? "" : trackingDomain.trim(),
         });
         toast.success("Campaign updated");
+        onClose();
       } else {
-        await createCampaign.mutateAsync({
+        const created = await createCampaign.mutateAsync({
           name: name.trim(),
           trafficSourceId,
           status,
           trackingDomain:
             trackingDomain === "__default__" ? "" : trackingDomain.trim(),
         });
-        toast.success("Campaign created — add streams to enable redirects");
+        if (created) {
+          setCreatedCampaign(created);
+          setStep(2);
+        } else {
+          toast.success("Campaign created");
+          onClose();
+        }
+        return;
       }
-      onClose();
     } catch (err) {
       toast.error(
         `Failed to save campaign: ${err instanceof Error ? err.message : String(err)}`,
@@ -614,117 +636,253 @@ function CampaignForm({ open, onClose, editingCampaign }: CampaignFormProps) {
     }
   };
 
+  const handleAddStream = async () => {
+    if (!createdCampaign) return;
+    if (!streamOfferId) {
+      toast.error("Please select an offer");
+      return;
+    }
+    try {
+      await createStream.mutateAsync({
+        name: streamName.trim() || "Main Stream",
+        campaignId: createdCampaign.id,
+        offerId: streamOfferId,
+        weight: BigInt(streamWeight),
+        state: StreamState.active,
+        position: BigInt(1),
+      });
+      toast.success("Campaign and stream created successfully");
+      if (onCreated) onCreated(createdCampaign);
+      onClose();
+    } catch (err) {
+      toast.error(
+        `Failed to create stream: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
+
+  const handleSkipStream = () => {
+    if (createdCampaign && onCreated) onCreated(createdCampaign);
+    toast.success("Campaign created — add a stream later to route traffic");
+    onClose();
+  };
+
   const isPending = createCampaign.isPending || updateCampaign.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg" data-ocid="campaign.dialog">
-        <DialogHeader>
-          <DialogTitle>
-            {editingCampaign ? "Edit Campaign" : "New Campaign"}
-          </DialogTitle>
-          <DialogDescription>
-            {editingCampaign
-              ? "Update campaign settings"
-              : "Create a new tracking campaign. After creating, add streams to route traffic to offers."}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="camp-name">Name *</Label>
-            <Input
-              id="camp-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Campaign name"
-              data-ocid="campaign.input"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Traffic Source *</Label>
-            <Select value={trafficSourceId} onValueChange={setTrafficSourceId}>
-              <SelectTrigger data-ocid="campaign.select">
-                <SelectValue placeholder="Select traffic source" />
-              </SelectTrigger>
-              <SelectContent>
-                {trafficSources?.map((ts) => (
-                  <SelectItem key={ts.id} value={ts.id}>
-                    {ts.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <Select
-              value={status}
-              onValueChange={(v) => setStatus(v as CampaignStatus)}
-            >
-              <SelectTrigger data-ocid="campaign.select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={CampaignStatus.active}>Active</SelectItem>
-                <SelectItem value={CampaignStatus.paused}>Paused</SelectItem>
-                <SelectItem value={CampaignStatus.archived}>
-                  Archived
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Tracking Domain</Label>
-            {campaignDomains.length > 0 ? (
-              <Select value={trackingDomain} onValueChange={setTrackingDomain}>
-                <SelectTrigger data-ocid="campaign.select">
-                  <SelectValue placeholder="Select campaign domain (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__default__">
-                    Default (app domain)
-                  </SelectItem>
-                  {campaignDomains.map((d) => (
-                    <SelectItem key={d.id} value={d.name}>
-                      {d.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-muted/40 text-sm text-muted-foreground">
-                No campaign domains configured — add one in the Domains section
+        {step === 1 ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {editingCampaign ? "Edit Campaign" : "New Campaign"}
+              </DialogTitle>
+              <DialogDescription>
+                {editingCampaign
+                  ? "Update campaign settings"
+                  : "Create a new tracking campaign. After creating, add a stream to route traffic to an offer."}
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="camp-name">Name *</Label>
+                <Input
+                  id="camp-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Campaign name"
+                  data-ocid="campaign.input"
+                />
               </div>
-            )}
-          </div>
+              <div className="space-y-2">
+                <Label>Traffic Source *</Label>
+                <Select
+                  value={trafficSourceId}
+                  onValueChange={setTrafficSourceId}
+                >
+                  <SelectTrigger data-ocid="campaign.select">
+                    <SelectValue placeholder="Select traffic source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {trafficSources?.map((ts) => (
+                      <SelectItem key={ts.id} value={ts.id}>
+                        {ts.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={status}
+                  onValueChange={(v) => setStatus(v as CampaignStatus)}
+                >
+                  <SelectTrigger data-ocid="campaign.select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={CampaignStatus.active}>
+                      Active
+                    </SelectItem>
+                    <SelectItem value={CampaignStatus.paused}>
+                      Paused
+                    </SelectItem>
+                    <SelectItem value={CampaignStatus.archived}>
+                      Archived
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Tracking Domain</Label>
+                {campaignDomains.length > 0 ? (
+                  <Select
+                    value={trackingDomain}
+                    onValueChange={setTrackingDomain}
+                  >
+                    <SelectTrigger data-ocid="campaign.select">
+                      <SelectValue placeholder="Select campaign domain (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">
+                        Default (app domain)
+                      </SelectItem>
+                      {campaignDomains.map((d) => (
+                        <SelectItem key={d.id} value={d.name}>
+                          {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-muted/40 text-sm text-muted-foreground">
+                    No campaign domains configured — add one in the Domains
+                    section
+                  </div>
+                )}
+              </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              data-ocid="campaign.cancel_button"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isPending}
-              data-ocid="campaign.submit_button"
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : editingCampaign ? (
-                "Update"
-              ) : (
-                "Create"
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onClose}
+                  data-ocid="campaign.cancel_button"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  data-ocid="campaign.submit_button"
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : editingCampaign ? (
+                    "Update"
+                  ) : (
+                    "Create & Add Stream →"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-primary" />
+                Add Stream to "{createdCampaign?.name}"
+              </DialogTitle>
+              <DialogDescription>
+                A stream routes traffic to an offer. Without a stream, visitors
+                won't be redirected.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Warning */}
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-md bg-warning/10 border border-warning/20 text-warning text-sm">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>
+                  Without a stream, traffic won't be redirected to an offer
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Offer *</Label>
+                <Select value={streamOfferId} onValueChange={setStreamOfferId}>
+                  <SelectTrigger data-ocid="stream.select">
+                    <SelectValue placeholder="Select offer to redirect to" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allOffers?.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="stream-name-inline">Stream Name</Label>
+                <Input
+                  id="stream-name-inline"
+                  value={streamName}
+                  onChange={(e) => setStreamName(e.target.value)}
+                  placeholder="Main Stream"
+                  data-ocid="stream.input"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="stream-weight-inline">Weight</Label>
+                <Input
+                  id="stream-weight-inline"
+                  type="number"
+                  min={1}
+                  value={streamWeight}
+                  onChange={(e) =>
+                    setStreamWeight(Number.parseInt(e.target.value) || 1)
+                  }
+                  data-ocid="stream.input"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSkipStream}
+                data-ocid="stream.cancel_button"
+              >
+                Skip for now
+              </Button>
+              <Button
+                type="button"
+                onClick={handleAddStream}
+                disabled={createStream.isPending}
+                data-ocid="stream.submit_button"
+              >
+                {createStream.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  "Add Stream"
+                )}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -808,6 +966,12 @@ export default function CampaignsPage() {
   const closeForm = () => {
     setFormOpen(false);
     setEditing(undefined);
+  };
+
+  // Stream creation now happens inline in CampaignForm (step 2).
+  // This handler is kept so callers can hook into post-creation if needed.
+  const handleCampaignCreated = (_campaign: Campaign) => {
+    // No-op: stream dialog is shown inside CampaignForm as step 2
   };
 
   return (
@@ -1033,6 +1197,7 @@ export default function CampaignsPage() {
           open={formOpen}
           onClose={closeForm}
           editingCampaign={editing}
+          onCreated={!editing ? handleCampaignCreated : undefined}
         />
       )}
 

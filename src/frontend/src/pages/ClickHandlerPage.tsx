@@ -1,47 +1,42 @@
 import { AlertTriangle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useAdminActor as useActor } from "../hooks/useAdminActor";
+import { createActorWithConfig } from "../config";
 
 interface ClickHandlerPageProps {
   campaignKey: string;
 }
 
-type ClickState = "pending" | "error";
-
 export default function ClickHandlerPage({
   campaignKey,
 }: ClickHandlerPageProps) {
-  const { actor, isFetching } = useActor();
-  const [state, setState] = useState<ClickState>("pending");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [hasError, setHasError] = useState(false);
   const processed = useRef(false);
 
   useEffect(() => {
-    if (isFetching || !actor || processed.current) return;
+    if (processed.current) return;
     processed.current = true;
 
-    const run = async () => {
+    (async () => {
       try {
+        const actor = await createActorWithConfig();
         const result = await actor.processClick(
           campaignKey,
           "",
           document.referrer || "",
           window.location.href,
         );
-        // Redirect immediately — no intermediate page
         window.location.replace(result.offerUrl);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setErrorMessage(msg);
-        setState("error");
+        setHasError(true);
       }
-    };
+    })();
+  }, [campaignKey]); // campaignKey is stable for the lifetime of this page
 
-    run();
-  }, [actor, isFetching, campaignKey]);
-
-  // While pending — render nothing visible (transparent/empty) to avoid flash
-  if (state === "pending") {
+  // While pending — render nothing visible to avoid flash
+  if (!hasError) {
     return <div style={{ display: "none" }} />;
   }
 
