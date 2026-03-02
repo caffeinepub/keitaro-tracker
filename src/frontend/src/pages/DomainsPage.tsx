@@ -36,6 +36,7 @@ import {
   Copy,
   Globe,
   Info,
+  Network,
   Pencil,
   Plus,
   Trash2,
@@ -117,7 +118,11 @@ function getDomainTypeDescription(type: DomainType): string {
 
 function DnsPopover({ domain }: DnsPopoverProps) {
   const host = window.location.hostname;
-  const cnameTarget = host;
+  // For ICP apps, the CNAME target is the canister's icp0.io hostname
+  const cnameTarget =
+    host.endsWith(".icp0.io") || host.endsWith(".ic0.app")
+      ? host
+      : `${host}.icp0.io`;
 
   // Extract subdomain part (e.g. "track" from "track.example.com")
   const subdomainPart = domain.name.split(".")[0];
@@ -421,6 +426,13 @@ export default function DomainsPage() {
     setEditing(undefined);
   };
 
+  const cnameTarget = (() => {
+    const host = window.location.hostname;
+    return host.endsWith(".icp0.io") || host.endsWith(".ic0.app")
+      ? host
+      : `${host}.icp0.io`;
+  })();
+
   return (
     <div className="p-6 space-y-5">
       <motion.div
@@ -445,6 +457,54 @@ export default function DomainsPage() {
           <Plus className="w-4 h-4" />
           Add Domain
         </Button>
+      </motion.div>
+
+      {/* DNS info banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="rounded-lg border border-info/20 bg-info/5 p-4"
+      >
+        <div className="flex items-start gap-3">
+          <Network className="w-4 h-4 text-info shrink-0 mt-0.5" />
+          <div className="space-y-2 flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground">
+              DNS Setup — CNAME Target
+            </p>
+            <p className="text-xs text-muted-foreground">
+              To connect your domain, add a{" "}
+              <span className="font-mono font-semibold text-foreground">
+                CNAME
+              </span>{" "}
+              record pointing to:
+            </p>
+            <div className="flex items-center gap-2 p-2.5 rounded-md bg-muted/60 border border-border">
+              <code className="text-sm font-mono font-semibold text-primary flex-1 break-all">
+                {cnameTarget}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(cnameTarget);
+                  toast.success("Copied!");
+                }}
+                className="shrink-0 p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                title="Copy CNAME target"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Example: <span className="font-mono">track.yourdomain.com</span> →
+              CNAME →{" "}
+              <span className="font-mono text-primary">{cnameTarget}</span>. DNS
+              propagation takes 5–60 minutes. Click the{" "}
+              <Info className="inline w-3 h-3" /> icon next to each domain for
+              detailed setup instructions.
+            </p>
+          </div>
+        </div>
       </motion.div>
 
       <motion.div

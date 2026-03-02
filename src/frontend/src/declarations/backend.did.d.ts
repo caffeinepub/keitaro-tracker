@@ -16,8 +16,8 @@ export interface Campaign {
   'name' : string,
   'createdAt' : Time,
   'updatedAt' : Time,
-  'offerIds' : Array<OfferWeight>,
   'trackingDomain' : string,
+  'campaignKey' : string,
   'trafficSourceId' : string,
 }
 export interface CampaignStats {
@@ -115,10 +115,28 @@ export type ParameterType = { 'float' : null } |
   { 'boolean' : null } |
   { 'currency' : null } |
   { 'percentage' : null };
+export interface ProcessClickResult {
+  'campaignId' : string,
+  'offerUrl' : string,
+  'clickId' : string,
+}
 export interface RoutingRule {
   'targetOffers' : Array<OfferWeight>,
   'conditions' : Array<Condition>,
 }
+export interface Stream {
+  'id' : string,
+  'weight' : bigint,
+  'name' : string,
+  'createdAt' : Time,
+  'campaignId' : string,
+  'updatedAt' : Time,
+  'state' : StreamState,
+  'position' : bigint,
+  'offerId' : string,
+}
+export type StreamState = { 'active' : null } |
+  { 'paused' : null };
 export type Time = bigint;
 export interface TrafficSource {
   'id' : string,
@@ -136,16 +154,38 @@ export type UserRole = { 'admin' : null } |
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  /**
+   * / *************  Campaigns **************
+   */
   'createCampaign' : ActorMethod<
-    [string, string, Array<OfferWeight>, CampaignStatus, string],
+    [string, string, CampaignStatus, string],
     Campaign
   >,
+  /**
+   * / *************  Domains **************
+   */
   'createDomain' : ActorMethod<[string, DomainType, DomainStatus], Domain>,
+  /**
+   * / *************  Flows **************
+   */
   'createFlow' : ActorMethod<[string, string, Array<RoutingRule>], Flow>,
+  /**
+   * / *************  Offers **************
+   */
   'createOffer' : ActorMethod<
     [string, string, bigint, string, OfferStatus],
     Offer
   >,
+  /**
+   * / *************  Streams **************
+   */
+  'createStream' : ActorMethod<
+    [string, string, string, bigint, StreamState, bigint],
+    Stream
+  >,
+  /**
+   * / *************  Traffic Sources **************
+   */
   'createTrafficSource' : ActorMethod<
     [string, string, CostModel, Array<Parameter>],
     TrafficSource
@@ -154,26 +194,54 @@ export interface _SERVICE {
   'deleteDomain' : ActorMethod<[string], undefined>,
   'deleteFlow' : ActorMethod<[string], undefined>,
   'deleteOffer' : ActorMethod<[string], undefined>,
+  'deleteStream' : ActorMethod<[string], undefined>,
   'deleteTrafficSource' : ActorMethod<[string], undefined>,
   'getAllCampaigns' : ActorMethod<[], Array<Campaign>>,
   'getAllDomains' : ActorMethod<[], Array<Domain>>,
   'getAllDomainsByType' : ActorMethod<[DomainType], Array<Domain>>,
   'getAllFlows' : ActorMethod<[], Array<Flow>>,
   'getAllOffers' : ActorMethod<[], Array<Offer>>,
+  'getAllStreams' : ActorMethod<[], Array<Stream>>,
   'getAllTrafficSources' : ActorMethod<[], Array<TrafficSource>>,
+  /**
+   * / *************  User Profiles **************
+   */
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCampaign' : ActorMethod<[string], Campaign>,
+  'getCampaignByKey' : ActorMethod<[string], Campaign>,
   'getCampaignStats' : ActorMethod<[], Array<CampaignStats>>,
   'getClicksLog' : ActorMethod<[bigint, bigint], Array<ClickEvent>>,
   'getConversionsLog' : ActorMethod<[bigint, bigint], Array<ConversionEvent>>,
   'getDomain' : ActorMethod<[string], Domain>,
   'getFlow' : ActorMethod<[string], Flow>,
   'getOffer' : ActorMethod<[string], Offer>,
+  'getStream' : ActorMethod<[string], Stream>,
+  'getStreamsByCampaign' : ActorMethod<[string], Array<Stream>>,
   'getTrafficSource' : ActorMethod<[string], TrafficSource>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  /**
+   * / *************  Initialization **************
+   */
   'initialize' : ActorMethod<[], undefined>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  /**
+   * / *************  Process Clicks **************
+   */
+  'processClick' : ActorMethod<
+    [string, string, string, string],
+    ProcessClickResult
+  >,
+  /**
+   * / *************  Process Postbacks **************
+   */
+  'processPostback' : ActorMethod<
+    [string, string, number, ConversionStatus],
+    ConversionEvent
+  >,
+  /**
+   * / *************  Legacy Clicks **************
+   */
   'recordClick' : ActorMethod<
     [string, string, string, string, string, string, string, string, string],
     ClickEvent
@@ -183,8 +251,9 @@ export interface _SERVICE {
     ConversionEvent
   >,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setProcessClickRandomValue' : ActorMethod<[bigint], undefined>,
   'updateCampaign' : ActorMethod<
-    [string, string, string, Array<OfferWeight>, CampaignStatus, string],
+    [string, string, string, CampaignStatus, string],
     Campaign
   >,
   'updateDomain' : ActorMethod<
@@ -198,6 +267,10 @@ export interface _SERVICE {
   'updateOffer' : ActorMethod<
     [string, string, string, bigint, string, OfferStatus],
     Offer
+  >,
+  'updateStream' : ActorMethod<
+    [string, string, string, bigint, StreamState, bigint],
+    Stream
   >,
   'updateTrafficSource' : ActorMethod<
     [string, string, string, CostModel, Array<Parameter>],

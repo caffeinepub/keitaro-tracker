@@ -13,14 +13,20 @@ import type {
   Flow,
   Offer,
   OfferStatus,
-  OfferWeight,
   Parameter,
   RoutingRule,
+  Stream,
   TrafficSource,
   UserProfile,
 } from "../backend.d";
 import { getCurrentActor, logActivity } from "../utils/activityLog";
 import { useAdminActor as useActor } from "./useAdminActor";
+
+// StreamState enum (not exported from backend.d.ts but used in Stream)
+export enum StreamState {
+  active = "active",
+  paused = "paused",
+}
 
 // ── User Profile ──────────────────────────────────────────────────────────────
 
@@ -82,7 +88,6 @@ export function useCreateCampaign() {
     mutationFn: async (args: {
       name: string;
       trafficSourceId: string;
-      offerIds: OfferWeight[];
       status: CampaignStatus;
       trackingDomain: string;
     }) => {
@@ -90,7 +95,6 @@ export function useCreateCampaign() {
       return actor.createCampaign(
         args.name,
         args.trafficSourceId,
-        args.offerIds,
         args.status,
         args.trackingDomain,
       );
@@ -117,7 +121,6 @@ export function useUpdateCampaign() {
       id: string;
       name: string;
       trafficSourceId: string;
-      offerIds: OfferWeight[];
       status: CampaignStatus;
       trackingDomain: string;
     }) => {
@@ -126,7 +129,6 @@ export function useUpdateCampaign() {
         args.id,
         args.name,
         args.trafficSourceId,
-        args.offerIds,
         args.status,
         args.trackingDomain,
       );
@@ -533,5 +535,135 @@ export function useGetConversionsLog(page: number, pageSize: number) {
       return actor.getConversionsLog(BigInt(page), BigInt(pageSize));
     },
     enabled: !!actor && !isFetching,
+  });
+}
+
+// ── Streams ───────────────────────────────────────────────────────────────────
+
+export function useGetStreamsByCampaign(campaignId: string) {
+  const { actor, isFetching } = useActor();
+  return useQuery<Stream[]>({
+    queryKey: ["streams", campaignId],
+    queryFn: async () => {
+      if (!actor || !campaignId) return [];
+      return actor.getStreamsByCampaign(campaignId);
+    },
+    enabled: !!actor && !isFetching && !!campaignId,
+  });
+}
+
+export function useCreateStream() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      name: string;
+      campaignId: string;
+      offerId: string;
+      weight: bigint;
+      state: StreamState;
+      position: bigint;
+    }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.createStream(
+        args.name,
+        args.campaignId,
+        args.offerId,
+        args.weight,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        args.state as any,
+        args.position,
+      );
+    },
+    onSuccess: (stream) => {
+      logActivity(
+        getCurrentActor(),
+        "Created",
+        "Stream",
+        stream.id,
+        stream.name,
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["streams", stream.campaignId],
+      });
+    },
+  });
+}
+
+export function useUpdateStream() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      campaignId: string;
+      name: string;
+      offerId: string;
+      weight: bigint;
+      state: StreamState;
+      position: bigint;
+    }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.updateStream(
+        args.id,
+        args.name,
+        args.offerId,
+        args.weight,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        args.state as any,
+        args.position,
+      );
+    },
+    onSuccess: (stream) => {
+      logActivity(
+        getCurrentActor(),
+        "Updated",
+        "Stream",
+        stream.id,
+        stream.name,
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["streams", stream.campaignId],
+      });
+    },
+  });
+}
+
+export function useDeleteStream() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      campaignId: string;
+      name: string;
+    }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.deleteStream(args.id);
+    },
+    onSuccess: (_, args) => {
+      logActivity(getCurrentActor(), "Deleted", "Stream", args.id, args.name);
+      queryClient.invalidateQueries({ queryKey: ["streams", args.campaignId] });
+    },
+  });
+}
+
+export function useProcessClick() {
+  const { actor } = useActor();
+  return useMutation({
+    mutationFn: async (args: {
+      campaignKey: string;
+      ipAddress: string;
+      referrerUrl: string;
+      landingPageUrl: string;
+    }) => {
+      if (!actor) throw new Error("Actor not available");
+      return actor.processClick(
+        args.campaignKey,
+        args.ipAddress,
+        args.referrerUrl,
+        args.landingPageUrl,
+      );
+    },
   });
 }

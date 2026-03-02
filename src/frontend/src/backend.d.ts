@@ -22,6 +22,11 @@ export interface Condition {
     value: string;
     operator: string;
 }
+export interface ProcessClickResult {
+    campaignId: string;
+    offerUrl: string;
+    clickId: string;
+}
 export interface Flow {
     id: string;
     name: string;
@@ -29,6 +34,17 @@ export interface Flow {
     campaignId: string;
     updatedAt: Time;
     rules: Array<RoutingRule>;
+}
+export interface Stream {
+    id: string;
+    weight: bigint;
+    name: string;
+    createdAt: Time;
+    campaignId: string;
+    updatedAt: Time;
+    state: StreamState;
+    position: bigint;
+    offerId: string;
 }
 export interface Domain {
     id: string;
@@ -58,6 +74,10 @@ export interface Offer {
     currency: string;
     payout: bigint;
 }
+export interface RoutingRule {
+    targetOffers: Array<OfferWeight>;
+    conditions: Array<Condition>;
+}
 export interface ConversionEvent {
     id: string;
     status: ConversionStatus;
@@ -67,10 +87,6 @@ export interface ConversionEvent {
     offerId: string;
     payout: number;
     clickId: string;
-}
-export interface RoutingRule {
-    targetOffers: Array<OfferWeight>;
-    conditions: Array<Condition>;
 }
 export interface CampaignStats {
     epc: bigint;
@@ -89,8 +105,8 @@ export interface Campaign {
     name: string;
     createdAt: Time;
     updatedAt: Time;
-    offerIds: Array<OfferWeight>;
     trackingDomain: string;
+    campaignKey: string;
     trafficSourceId: string;
 }
 export interface UserProfile {
@@ -153,41 +169,84 @@ export enum UserRole {
 }
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
-    createCampaign(name: string, trafficSourceId: string, offerIds: Array<OfferWeight>, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
+    /**
+     * / *************  Campaigns **************
+     */
+    createCampaign(name: string, trafficSourceId: string, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
+    /**
+     * / *************  Domains **************
+     */
     createDomain(name: string, domainType: DomainType, status: DomainStatus): Promise<Domain>;
+    /**
+     * / *************  Flows **************
+     */
     createFlow(name: string, campaignId: string, rules: Array<RoutingRule>): Promise<Flow>;
+    /**
+     * / *************  Offers **************
+     */
     createOffer(name: string, url: string, payout: bigint, currency: string, status: OfferStatus): Promise<Offer>;
+    /**
+     * / *************  Streams **************
+     */
+    createStream(name: string, campaignId: string, offerId: string, weight: bigint, state: StreamState, position: bigint): Promise<Stream>;
+    /**
+     * / *************  Traffic Sources **************
+     */
     createTrafficSource(name: string, postbackUrl: string, costModel: CostModel, parameters: Array<Parameter>): Promise<TrafficSource>;
     deleteCampaign(id: string): Promise<void>;
     deleteDomain(id: string): Promise<void>;
     deleteFlow(id: string): Promise<void>;
     deleteOffer(id: string): Promise<void>;
+    deleteStream(id: string): Promise<void>;
     deleteTrafficSource(id: string): Promise<void>;
     getAllCampaigns(): Promise<Array<Campaign>>;
     getAllDomains(): Promise<Array<Domain>>;
     getAllDomainsByType(domainType: DomainType): Promise<Array<Domain>>;
     getAllFlows(): Promise<Array<Flow>>;
     getAllOffers(): Promise<Array<Offer>>;
+    getAllStreams(): Promise<Array<Stream>>;
     getAllTrafficSources(): Promise<Array<TrafficSource>>;
+    /**
+     * / *************  User Profiles **************
+     */
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCampaign(id: string): Promise<Campaign>;
+    getCampaignByKey(campaignKey: string): Promise<Campaign>;
     getCampaignStats(): Promise<Array<CampaignStats>>;
     getClicksLog(page: bigint, pageSize: bigint): Promise<Array<ClickEvent>>;
     getConversionsLog(page: bigint, pageSize: bigint): Promise<Array<ConversionEvent>>;
     getDomain(id: string): Promise<Domain>;
     getFlow(id: string): Promise<Flow>;
     getOffer(id: string): Promise<Offer>;
+    getStream(id: string): Promise<Stream>;
+    getStreamsByCampaign(campaignId: string): Promise<Array<Stream>>;
     getTrafficSource(id: string): Promise<TrafficSource>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
+    /**
+     * / *************  Initialization **************
+     */
     initialize(): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
+    /**
+     * / *************  Process Clicks **************
+     */
+    processClick(campaignKey: string, ipAddress: string, referrerUrl: string, landingPageUrl: string): Promise<ProcessClickResult>;
+    /**
+     * / *************  Process Postbacks **************
+     */
+    processPostback(clickId: string, offerId: string, payout: number, status: ConversionStatus): Promise<ConversionEvent>;
+    /**
+     * / *************  Legacy Clicks **************
+     */
     recordClick(campaignId: string, ipAddress: string, country: string, city: string, os: string, browser: string, deviceType: string, referrerUrl: string, landingPageUrl: string): Promise<ClickEvent>;
     recordConversion(clickId: string, campaignId: string, offerId: string, payout: number, revenue: bigint, status: ConversionStatus): Promise<ConversionEvent>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
-    updateCampaign(id: string, name: string, trafficSourceId: string, offerIds: Array<OfferWeight>, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
+    setProcessClickRandomValue(value: bigint): Promise<void>;
+    updateCampaign(id: string, name: string, trafficSourceId: string, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
     updateDomain(id: string, name: string, domainType: DomainType, status: DomainStatus): Promise<Domain>;
     updateFlow(id: string, name: string, campaignId: string, rules: Array<RoutingRule>): Promise<Flow>;
     updateOffer(id: string, name: string, url: string, payout: bigint, currency: string, status: OfferStatus): Promise<Offer>;
+    updateStream(id: string, name: string, offerId: string, weight: bigint, state: StreamState, position: bigint): Promise<Stream>;
     updateTrafficSource(id: string, name: string, postbackUrl: string, costModel: CostModel, parameters: Array<Parameter>): Promise<TrafficSource>;
 }

@@ -13,10 +13,6 @@ export const UserRole = IDL.Variant({
   'user' : IDL.Null,
   'guest' : IDL.Null,
 });
-export const OfferWeight = IDL.Record({
-  'weight' : IDL.Nat,
-  'offerId' : IDL.Text,
-});
 export const CampaignStatus = IDL.Variant({
   'active' : IDL.Null,
   'archived' : IDL.Null,
@@ -29,8 +25,8 @@ export const Campaign = IDL.Record({
   'name' : IDL.Text,
   'createdAt' : Time,
   'updatedAt' : Time,
-  'offerIds' : IDL.Vec(OfferWeight),
   'trackingDomain' : IDL.Text,
+  'campaignKey' : IDL.Text,
   'trafficSourceId' : IDL.Text,
 });
 export const DomainType = IDL.Variant({
@@ -49,6 +45,10 @@ export const Domain = IDL.Record({
   'name' : IDL.Text,
   'createdAt' : Time,
   'updatedAt' : Time,
+});
+export const OfferWeight = IDL.Record({
+  'weight' : IDL.Nat,
+  'offerId' : IDL.Text,
 });
 export const Condition = IDL.Record({
   'field' : IDL.Text,
@@ -80,6 +80,21 @@ export const Offer = IDL.Record({
   'updatedAt' : Time,
   'currency' : IDL.Text,
   'payout' : IDL.Nat,
+});
+export const StreamState = IDL.Variant({
+  'active' : IDL.Null,
+  'paused' : IDL.Null,
+});
+export const Stream = IDL.Record({
+  'id' : IDL.Text,
+  'weight' : IDL.Nat,
+  'name' : IDL.Text,
+  'createdAt' : Time,
+  'campaignId' : IDL.Text,
+  'updatedAt' : Time,
+  'state' : StreamState,
+  'position' : IDL.Nat,
+  'offerId' : IDL.Text,
 });
 export const CostModel = IDL.Variant({
   'cpa' : IDL.Null,
@@ -150,12 +165,17 @@ export const ConversionEvent = IDL.Record({
   'payout' : IDL.Float64,
   'clickId' : IDL.Text,
 });
+export const ProcessClickResult = IDL.Record({
+  'campaignId' : IDL.Text,
+  'offerUrl' : IDL.Text,
+  'clickId' : IDL.Text,
+});
 
 export const idlService = IDL.Service({
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'createCampaign' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Vec(OfferWeight), CampaignStatus, IDL.Text],
+      [IDL.Text, IDL.Text, CampaignStatus, IDL.Text],
       [Campaign],
       [],
     ),
@@ -170,6 +190,11 @@ export const idlService = IDL.Service({
       [Offer],
       [],
     ),
+  'createStream' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, StreamState, IDL.Nat],
+      [Stream],
+      [],
+    ),
   'createTrafficSource' : IDL.Func(
       [IDL.Text, IDL.Text, CostModel, IDL.Vec(Parameter)],
       [TrafficSource],
@@ -179,16 +204,19 @@ export const idlService = IDL.Service({
   'deleteDomain' : IDL.Func([IDL.Text], [], []),
   'deleteFlow' : IDL.Func([IDL.Text], [], []),
   'deleteOffer' : IDL.Func([IDL.Text], [], []),
+  'deleteStream' : IDL.Func([IDL.Text], [], []),
   'deleteTrafficSource' : IDL.Func([IDL.Text], [], []),
   'getAllCampaigns' : IDL.Func([], [IDL.Vec(Campaign)], ['query']),
   'getAllDomains' : IDL.Func([], [IDL.Vec(Domain)], ['query']),
   'getAllDomainsByType' : IDL.Func([DomainType], [IDL.Vec(Domain)], ['query']),
   'getAllFlows' : IDL.Func([], [IDL.Vec(Flow)], ['query']),
   'getAllOffers' : IDL.Func([], [IDL.Vec(Offer)], ['query']),
+  'getAllStreams' : IDL.Func([], [IDL.Vec(Stream)], ['query']),
   'getAllTrafficSources' : IDL.Func([], [IDL.Vec(TrafficSource)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCampaign' : IDL.Func([IDL.Text], [Campaign], ['query']),
+  'getCampaignByKey' : IDL.Func([IDL.Text], [Campaign], ['query']),
   'getCampaignStats' : IDL.Func([], [IDL.Vec(CampaignStats)], ['query']),
   'getClicksLog' : IDL.Func(
       [IDL.Nat, IDL.Nat],
@@ -203,6 +231,8 @@ export const idlService = IDL.Service({
   'getDomain' : IDL.Func([IDL.Text], [Domain], ['query']),
   'getFlow' : IDL.Func([IDL.Text], [Flow], ['query']),
   'getOffer' : IDL.Func([IDL.Text], [Offer], ['query']),
+  'getStream' : IDL.Func([IDL.Text], [Stream], ['query']),
+  'getStreamsByCampaign' : IDL.Func([IDL.Text], [IDL.Vec(Stream)], ['query']),
   'getTrafficSource' : IDL.Func([IDL.Text], [TrafficSource], ['query']),
   'getUserProfile' : IDL.Func(
       [IDL.Principal],
@@ -211,6 +241,16 @@ export const idlService = IDL.Service({
     ),
   'initialize' : IDL.Func([], [], []),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'processClick' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [ProcessClickResult],
+      [],
+    ),
+  'processPostback' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Float64, ConversionStatus],
+      [ConversionEvent],
+      [],
+    ),
   'recordClick' : IDL.Func(
       [
         IDL.Text,
@@ -232,15 +272,9 @@ export const idlService = IDL.Service({
       [],
     ),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setProcessClickRandomValue' : IDL.Func([IDL.Nat], [], []),
   'updateCampaign' : IDL.Func(
-      [
-        IDL.Text,
-        IDL.Text,
-        IDL.Text,
-        IDL.Vec(OfferWeight),
-        CampaignStatus,
-        IDL.Text,
-      ],
+      [IDL.Text, IDL.Text, IDL.Text, CampaignStatus, IDL.Text],
       [Campaign],
       [],
     ),
@@ -259,6 +293,11 @@ export const idlService = IDL.Service({
       [Offer],
       [],
     ),
+  'updateStream' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, StreamState, IDL.Nat],
+      [Stream],
+      [],
+    ),
   'updateTrafficSource' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, CostModel, IDL.Vec(Parameter)],
       [TrafficSource],
@@ -274,7 +313,6 @@ export const idlFactory = ({ IDL }) => {
     'user' : IDL.Null,
     'guest' : IDL.Null,
   });
-  const OfferWeight = IDL.Record({ 'weight' : IDL.Nat, 'offerId' : IDL.Text });
   const CampaignStatus = IDL.Variant({
     'active' : IDL.Null,
     'archived' : IDL.Null,
@@ -287,8 +325,8 @@ export const idlFactory = ({ IDL }) => {
     'name' : IDL.Text,
     'createdAt' : Time,
     'updatedAt' : Time,
-    'offerIds' : IDL.Vec(OfferWeight),
     'trackingDomain' : IDL.Text,
+    'campaignKey' : IDL.Text,
     'trafficSourceId' : IDL.Text,
   });
   const DomainType = IDL.Variant({
@@ -308,6 +346,7 @@ export const idlFactory = ({ IDL }) => {
     'createdAt' : Time,
     'updatedAt' : Time,
   });
+  const OfferWeight = IDL.Record({ 'weight' : IDL.Nat, 'offerId' : IDL.Text });
   const Condition = IDL.Record({
     'field' : IDL.Text,
     'value' : IDL.Text,
@@ -335,6 +374,18 @@ export const idlFactory = ({ IDL }) => {
     'updatedAt' : Time,
     'currency' : IDL.Text,
     'payout' : IDL.Nat,
+  });
+  const StreamState = IDL.Variant({ 'active' : IDL.Null, 'paused' : IDL.Null });
+  const Stream = IDL.Record({
+    'id' : IDL.Text,
+    'weight' : IDL.Nat,
+    'name' : IDL.Text,
+    'createdAt' : Time,
+    'campaignId' : IDL.Text,
+    'updatedAt' : Time,
+    'state' : StreamState,
+    'position' : IDL.Nat,
+    'offerId' : IDL.Text,
   });
   const CostModel = IDL.Variant({
     'cpa' : IDL.Null,
@@ -405,12 +456,17 @@ export const idlFactory = ({ IDL }) => {
     'payout' : IDL.Float64,
     'clickId' : IDL.Text,
   });
+  const ProcessClickResult = IDL.Record({
+    'campaignId' : IDL.Text,
+    'offerUrl' : IDL.Text,
+    'clickId' : IDL.Text,
+  });
   
   return IDL.Service({
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'createCampaign' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Vec(OfferWeight), CampaignStatus, IDL.Text],
+        [IDL.Text, IDL.Text, CampaignStatus, IDL.Text],
         [Campaign],
         [],
       ),
@@ -429,6 +485,11 @@ export const idlFactory = ({ IDL }) => {
         [Offer],
         [],
       ),
+    'createStream' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, StreamState, IDL.Nat],
+        [Stream],
+        [],
+      ),
     'createTrafficSource' : IDL.Func(
         [IDL.Text, IDL.Text, CostModel, IDL.Vec(Parameter)],
         [TrafficSource],
@@ -438,6 +499,7 @@ export const idlFactory = ({ IDL }) => {
     'deleteDomain' : IDL.Func([IDL.Text], [], []),
     'deleteFlow' : IDL.Func([IDL.Text], [], []),
     'deleteOffer' : IDL.Func([IDL.Text], [], []),
+    'deleteStream' : IDL.Func([IDL.Text], [], []),
     'deleteTrafficSource' : IDL.Func([IDL.Text], [], []),
     'getAllCampaigns' : IDL.Func([], [IDL.Vec(Campaign)], ['query']),
     'getAllDomains' : IDL.Func([], [IDL.Vec(Domain)], ['query']),
@@ -448,10 +510,12 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getAllFlows' : IDL.Func([], [IDL.Vec(Flow)], ['query']),
     'getAllOffers' : IDL.Func([], [IDL.Vec(Offer)], ['query']),
+    'getAllStreams' : IDL.Func([], [IDL.Vec(Stream)], ['query']),
     'getAllTrafficSources' : IDL.Func([], [IDL.Vec(TrafficSource)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCampaign' : IDL.Func([IDL.Text], [Campaign], ['query']),
+    'getCampaignByKey' : IDL.Func([IDL.Text], [Campaign], ['query']),
     'getCampaignStats' : IDL.Func([], [IDL.Vec(CampaignStats)], ['query']),
     'getClicksLog' : IDL.Func(
         [IDL.Nat, IDL.Nat],
@@ -466,6 +530,8 @@ export const idlFactory = ({ IDL }) => {
     'getDomain' : IDL.Func([IDL.Text], [Domain], ['query']),
     'getFlow' : IDL.Func([IDL.Text], [Flow], ['query']),
     'getOffer' : IDL.Func([IDL.Text], [Offer], ['query']),
+    'getStream' : IDL.Func([IDL.Text], [Stream], ['query']),
+    'getStreamsByCampaign' : IDL.Func([IDL.Text], [IDL.Vec(Stream)], ['query']),
     'getTrafficSource' : IDL.Func([IDL.Text], [TrafficSource], ['query']),
     'getUserProfile' : IDL.Func(
         [IDL.Principal],
@@ -474,6 +540,16 @@ export const idlFactory = ({ IDL }) => {
       ),
     'initialize' : IDL.Func([], [], []),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'processClick' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [ProcessClickResult],
+        [],
+      ),
+    'processPostback' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Float64, ConversionStatus],
+        [ConversionEvent],
+        [],
+      ),
     'recordClick' : IDL.Func(
         [
           IDL.Text,
@@ -495,15 +571,9 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setProcessClickRandomValue' : IDL.Func([IDL.Nat], [], []),
     'updateCampaign' : IDL.Func(
-        [
-          IDL.Text,
-          IDL.Text,
-          IDL.Text,
-          IDL.Vec(OfferWeight),
-          CampaignStatus,
-          IDL.Text,
-        ],
+        [IDL.Text, IDL.Text, IDL.Text, CampaignStatus, IDL.Text],
         [Campaign],
         [],
       ),
@@ -520,6 +590,11 @@ export const idlFactory = ({ IDL }) => {
     'updateOffer' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, IDL.Text, OfferStatus],
         [Offer],
+        [],
+      ),
+    'updateStream' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Nat, StreamState, IDL.Nat],
+        [Stream],
         [],
       ),
     'updateTrafficSource' : IDL.Func(

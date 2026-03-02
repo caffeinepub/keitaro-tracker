@@ -110,6 +110,9 @@ export default function ClicksLogPage() {
                     Time
                   </TableHead>
                   <TableHead className="text-xs font-medium text-muted-foreground">
+                    Click ID
+                  </TableHead>
+                  <TableHead className="text-xs font-medium text-muted-foreground">
                     Campaign
                   </TableHead>
                   <TableHead className="text-xs font-medium text-muted-foreground">
@@ -136,7 +139,7 @@ export default function ClicksLogPage() {
                 {!clicks || clicks.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="text-center py-16 text-muted-foreground"
                     >
                       <div className="flex flex-col items-center gap-2">
@@ -151,13 +154,22 @@ export default function ClicksLogPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  clicks.map((click) => (
+                  clicks.map((click, idx) => (
                     <TableRow
                       key={click.id}
                       className="border-border hover:bg-accent/20 transition-colors"
+                      data-ocid={`clicks.item.${idx + 1}`}
                     >
                       <TableCell className="pl-5 font-mono text-xs whitespace-nowrap text-muted-foreground">
                         {formatTime(click.timestamp)}
+                      </TableCell>
+                      <TableCell className="max-w-[120px]">
+                        <span
+                          className="truncate block font-mono text-xs text-primary"
+                          title={click.id}
+                        >
+                          {click.id.slice(0, 12)}…
+                        </span>
                       </TableCell>
                       <TableCell className="text-sm max-w-[120px]">
                         <span className="truncate block">

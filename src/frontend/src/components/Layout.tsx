@@ -35,13 +35,14 @@ import {
   Zap,
 } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { UserProfile } from "../backend.d";
 import type { EmailUser } from "../contexts/EmailAuthContext";
 import { useEmailAuth } from "../contexts/EmailAuthContext";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import ActivityLogPage from "../pages/ActivityLogPage";
 import CampaignsPage from "../pages/CampaignsPage";
+import ClickHandlerPage from "../pages/ClickHandlerPage";
 import ClicksLogPage from "../pages/ClicksLogPage";
 import ConversionsLogPage from "../pages/ConversionsLogPage";
 import DashboardPage from "../pages/DashboardPage";
@@ -88,6 +89,13 @@ const navItems = [
   { id: "reports" as Page, label: "Reports", icon: BarChart3 },
 ];
 
+// Parse hash for click route: #/click/:campaignKey
+function getClickCampaignKey(): string | null {
+  const hash = window.location.hash;
+  const match = hash.match(/^#\/click\/(.+)$/);
+  return match ? match[1] : null;
+}
+
 export default function Layout({
   userProfile,
   emailUser,
@@ -96,9 +104,21 @@ export default function Layout({
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [collapsed, setCollapsed] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [clickCampaignKey, setClickCampaignKey] = useState<string | null>(
+    getClickCampaignKey,
+  );
   const { identity, clear } = useInternetIdentity();
   const { logoutEmail } = useEmailAuth();
   const queryClient = useQueryClient();
+
+  // Listen for hash changes (in case of back/forward navigation)
+  useEffect(() => {
+    const handleHashChange = () => {
+      setClickCampaignKey(getClickCampaignKey());
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
 
   const isAuthenticated = !!identity || !!emailUser;
 
@@ -161,6 +181,11 @@ export default function Layout({
         icon: React.ComponentType<{ className?: string }>;
       }
     | undefined;
+
+  // If hash matches #/click/:campaignKey, render click handler directly
+  if (clickCampaignKey) {
+    return <ClickHandlerPage campaignKey={clickCampaignKey} />;
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">

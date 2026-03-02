@@ -66,7 +66,7 @@ export function EmailAuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(CURRENT_USER_KEY);
+      const raw = localStorage.getItem(CURRENT_USER_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as EmailUser;
         setEmailUser(parsed);
@@ -94,7 +94,7 @@ export function EmailAuthProvider({ children }: { children: React.ReactNode }) {
         email: user.email,
         displayName: user.displayName,
       };
-      sessionStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
       setEmailUser(currentUser);
     },
     [],
@@ -127,14 +127,14 @@ export function EmailAuthProvider({ children }: { children: React.ReactNode }) {
         email: newUser.email,
         displayName: newUser.displayName,
       };
-      sessionStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
+      localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(currentUser));
       setEmailUser(currentUser);
     },
     [],
   );
 
   const logoutEmail = useCallback(() => {
-    sessionStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.removeItem(CURRENT_USER_KEY);
     setEmailUser(null);
   }, []);
 
