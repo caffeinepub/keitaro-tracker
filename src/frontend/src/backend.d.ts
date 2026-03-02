@@ -78,6 +78,12 @@ export interface RoutingRule {
     targetOffers: Array<OfferWeight>;
     conditions: Array<Condition>;
 }
+export interface ErrorLog {
+    id: string;
+    context: string;
+    message: string;
+    timestamp: Time;
+}
 export interface ConversionEvent {
     id: string;
     status: ConversionStatus;
@@ -170,27 +176,27 @@ export enum UserRole {
 export interface backendInterface {
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     /**
-     * / *************  Campaigns **************
+     * / ************* Campaigns **************
      */
     createCampaign(name: string, trafficSourceId: string, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
     /**
-     * / *************  Domains **************
+     * / ************* Domains **************
      */
     createDomain(name: string, domainType: DomainType, status: DomainStatus): Promise<Domain>;
     /**
-     * / *************  Flows **************
+     * / ************* Flows **************
      */
     createFlow(name: string, campaignId: string, rules: Array<RoutingRule>): Promise<Flow>;
     /**
-     * / *************  Offers **************
+     * / ************* Offers **************
      */
     createOffer(name: string, url: string, payout: bigint, currency: string, status: OfferStatus): Promise<Offer>;
     /**
-     * / *************  Streams **************
+     * / ************* Streams **************
      */
     createStream(name: string, campaignId: string, offerId: string, weight: bigint, state: StreamState, position: bigint): Promise<Stream>;
     /**
-     * / *************  Traffic Sources **************
+     * / ************* Traffic Sources **************
      */
     createTrafficSource(name: string, postbackUrl: string, costModel: CostModel, parameters: Array<Parameter>): Promise<TrafficSource>;
     deleteCampaign(id: string): Promise<void>;
@@ -199,6 +205,7 @@ export interface backendInterface {
     deleteOffer(id: string): Promise<void>;
     deleteStream(id: string): Promise<void>;
     deleteTrafficSource(id: string): Promise<void>;
+    generateInviteToken(sessionToken: string): Promise<string>;
     getAllCampaigns(): Promise<Array<Campaign>>;
     getAllDomains(): Promise<Array<Domain>>;
     getAllDomainsByType(domainType: DomainType): Promise<Array<Domain>>;
@@ -207,7 +214,7 @@ export interface backendInterface {
     getAllStreams(): Promise<Array<Stream>>;
     getAllTrafficSources(): Promise<Array<TrafficSource>>;
     /**
-     * / *************  User Profiles **************
+     * / ************* User Profile Functions (Required by Frontend) **************
      */
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
@@ -217,30 +224,46 @@ export interface backendInterface {
     getClicksLog(page: bigint, pageSize: bigint): Promise<Array<ClickEvent>>;
     getConversionsLog(page: bigint, pageSize: bigint): Promise<Array<ConversionEvent>>;
     getDomain(id: string): Promise<Domain>;
+    getErrorLog(): Promise<Array<ErrorLog>>;
     getFlow(id: string): Promise<Flow>;
+    getMyProfile(sessionToken: string): Promise<{
+        displayName: string;
+        email: string;
+    }>;
     getOffer(id: string): Promise<Offer>;
     getStream(id: string): Promise<Stream>;
     getStreamsByCampaign(campaignId: string): Promise<Array<Stream>>;
     getTrafficSource(id: string): Promise<TrafficSource>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     /**
-     * / *************  Initialization **************
+     * / ************* Initialization **************
      */
     initialize(): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
     /**
-     * / *************  Process Clicks **************
+     * / ************* Error Logging **************
+     */
+    logError(context: string, message: string): Promise<void>;
+    loginUser(email: string, passwordHash: string): Promise<string>;
+    logoutUser(sessionToken: string): Promise<void>;
+    /**
+     * / ************* Process Clicks **************
      */
     processClick(campaignKey: string, ipAddress: string, referrerUrl: string, landingPageUrl: string): Promise<ProcessClickResult>;
     /**
-     * / *************  Process Postbacks **************
+     * / ************* Process Postbacks **************
      */
     processPostback(clickId: string, offerId: string, payout: number, status: ConversionStatus): Promise<ConversionEvent>;
     /**
-     * / *************  Legacy Clicks **************
+     * / ************* Legacy Clicks **************
      */
     recordClick(campaignId: string, ipAddress: string, country: string, city: string, os: string, browser: string, deviceType: string, referrerUrl: string, landingPageUrl: string): Promise<ClickEvent>;
     recordConversion(clickId: string, campaignId: string, offerId: string, payout: number, revenue: bigint, status: ConversionStatus): Promise<ConversionEvent>;
+    /**
+     * / ************* User Authentication **************
+     */
+    registerFirstUser(email: string, passwordHash: string, displayName: string): Promise<string>;
+    registerWithInvite(inviteToken: string, email: string, passwordHash: string, displayName: string): Promise<string>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setProcessClickRandomValue(value: bigint): Promise<void>;
     updateCampaign(id: string, name: string, trafficSourceId: string, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
@@ -249,4 +272,8 @@ export interface backendInterface {
     updateOffer(id: string, name: string, url: string, payout: bigint, currency: string, status: OfferStatus): Promise<Offer>;
     updateStream(id: string, name: string, offerId: string, weight: bigint, state: StreamState, position: bigint): Promise<Stream>;
     updateTrafficSource(id: string, name: string, postbackUrl: string, costModel: CostModel, parameters: Array<Parameter>): Promise<TrafficSource>;
+    validateSession(sessionToken: string): Promise<{
+        displayName: string;
+        email: string;
+    }>;
 }

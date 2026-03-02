@@ -82,6 +82,12 @@ export type DomainStatus = { 'active' : null } |
 export type DomainType = { 'postback' : null } |
   { 'admin' : null } |
   { 'campaign' : null };
+export interface ErrorLog {
+  'id' : string,
+  'context' : string,
+  'message' : string,
+  'timestamp' : Time,
+}
 export interface Flow {
   'id' : string,
   'name' : string,
@@ -155,36 +161,36 @@ export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   /**
-   * / *************  Campaigns **************
+   * / ************* Campaigns **************
    */
   'createCampaign' : ActorMethod<
     [string, string, CampaignStatus, string],
     Campaign
   >,
   /**
-   * / *************  Domains **************
+   * / ************* Domains **************
    */
   'createDomain' : ActorMethod<[string, DomainType, DomainStatus], Domain>,
   /**
-   * / *************  Flows **************
+   * / ************* Flows **************
    */
   'createFlow' : ActorMethod<[string, string, Array<RoutingRule>], Flow>,
   /**
-   * / *************  Offers **************
+   * / ************* Offers **************
    */
   'createOffer' : ActorMethod<
     [string, string, bigint, string, OfferStatus],
     Offer
   >,
   /**
-   * / *************  Streams **************
+   * / ************* Streams **************
    */
   'createStream' : ActorMethod<
     [string, string, string, bigint, StreamState, bigint],
     Stream
   >,
   /**
-   * / *************  Traffic Sources **************
+   * / ************* Traffic Sources **************
    */
   'createTrafficSource' : ActorMethod<
     [string, string, CostModel, Array<Parameter>],
@@ -196,6 +202,7 @@ export interface _SERVICE {
   'deleteOffer' : ActorMethod<[string], undefined>,
   'deleteStream' : ActorMethod<[string], undefined>,
   'deleteTrafficSource' : ActorMethod<[string], undefined>,
+  'generateInviteToken' : ActorMethod<[string], string>,
   'getAllCampaigns' : ActorMethod<[], Array<Campaign>>,
   'getAllDomains' : ActorMethod<[], Array<Domain>>,
   'getAllDomainsByType' : ActorMethod<[DomainType], Array<Domain>>,
@@ -204,7 +211,7 @@ export interface _SERVICE {
   'getAllStreams' : ActorMethod<[], Array<Stream>>,
   'getAllTrafficSources' : ActorMethod<[], Array<TrafficSource>>,
   /**
-   * / *************  User Profiles **************
+   * / ************* User Profile Functions (Required by Frontend) **************
    */
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
@@ -214,33 +221,44 @@ export interface _SERVICE {
   'getClicksLog' : ActorMethod<[bigint, bigint], Array<ClickEvent>>,
   'getConversionsLog' : ActorMethod<[bigint, bigint], Array<ConversionEvent>>,
   'getDomain' : ActorMethod<[string], Domain>,
+  'getErrorLog' : ActorMethod<[], Array<ErrorLog>>,
   'getFlow' : ActorMethod<[string], Flow>,
+  'getMyProfile' : ActorMethod<
+    [string],
+    { 'displayName' : string, 'email' : string }
+  >,
   'getOffer' : ActorMethod<[string], Offer>,
   'getStream' : ActorMethod<[string], Stream>,
   'getStreamsByCampaign' : ActorMethod<[string], Array<Stream>>,
   'getTrafficSource' : ActorMethod<[string], TrafficSource>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   /**
-   * / *************  Initialization **************
+   * / ************* Initialization **************
    */
   'initialize' : ActorMethod<[], undefined>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   /**
-   * / *************  Process Clicks **************
+   * / ************* Error Logging **************
+   */
+  'logError' : ActorMethod<[string, string], undefined>,
+  'loginUser' : ActorMethod<[string, string], string>,
+  'logoutUser' : ActorMethod<[string], undefined>,
+  /**
+   * / ************* Process Clicks **************
    */
   'processClick' : ActorMethod<
     [string, string, string, string],
     ProcessClickResult
   >,
   /**
-   * / *************  Process Postbacks **************
+   * / ************* Process Postbacks **************
    */
   'processPostback' : ActorMethod<
     [string, string, number, ConversionStatus],
     ConversionEvent
   >,
   /**
-   * / *************  Legacy Clicks **************
+   * / ************* Legacy Clicks **************
    */
   'recordClick' : ActorMethod<
     [string, string, string, string, string, string, string, string, string],
@@ -250,6 +268,11 @@ export interface _SERVICE {
     [string, string, string, number, bigint, ConversionStatus],
     ConversionEvent
   >,
+  /**
+   * / ************* User Authentication **************
+   */
+  'registerFirstUser' : ActorMethod<[string, string, string], string>,
+  'registerWithInvite' : ActorMethod<[string, string, string, string], string>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'setProcessClickRandomValue' : ActorMethod<[bigint], undefined>,
   'updateCampaign' : ActorMethod<
@@ -275,6 +298,10 @@ export interface _SERVICE {
   'updateTrafficSource' : ActorMethod<
     [string, string, string, CostModel, Array<Parameter>],
     TrafficSource
+  >,
+  'validateSession' : ActorMethod<
+    [string],
+    { 'displayName' : string, 'email' : string }
   >,
 }
 export declare const idlService: IDL.ServiceClass;

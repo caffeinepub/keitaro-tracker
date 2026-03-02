@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, MousePointerClick } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAdminActor as useActor } from "../hooks/useAdminActor";
 
@@ -6,15 +6,14 @@ interface ClickHandlerPageProps {
   campaignKey: string;
 }
 
-type ClickState = "loading" | "redirecting" | "error";
+type ClickState = "pending" | "error";
 
 export default function ClickHandlerPage({
   campaignKey,
 }: ClickHandlerPageProps) {
   const { actor, isFetching } = useActor();
-  const [state, setState] = useState<ClickState>("loading");
+  const [state, setState] = useState<ClickState>("pending");
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [offerUrl, setOfferUrl] = useState<string>("");
   const processed = useRef(false);
 
   useEffect(() => {
@@ -29,12 +28,8 @@ export default function ClickHandlerPage({
           document.referrer || "",
           window.location.href,
         );
-        setOfferUrl(result.offerUrl);
-        setState("redirecting");
-        // Redirect after brief delay so user sees feedback
-        setTimeout(() => {
-          window.location.href = result.offerUrl;
-        }, 300);
+        // Redirect immediately — no intermediate page
+        window.location.replace(result.offerUrl);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setErrorMessage(msg);
@@ -45,32 +40,9 @@ export default function ClickHandlerPage({
     run();
   }, [actor, isFetching, campaignKey]);
 
-  if (state === "loading" || state === "redirecting") {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-center px-4">
-          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-            {state === "redirecting" ? (
-              <MousePointerClick className="w-6 h-6 text-primary" />
-            ) : (
-              <Loader2 className="w-6 h-6 text-primary animate-spin" />
-            )}
-          </div>
-          <div>
-            <p className="text-base font-semibold text-foreground">
-              {state === "redirecting"
-                ? "Redirecting..."
-                : "Processing click..."}
-            </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {state === "redirecting"
-                ? `You will be redirected to ${offerUrl}`
-                : "Please wait a moment"}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
+  // While pending — render nothing visible (transparent/empty) to avoid flash
+  if (state === "pending") {
+    return <div style={{ display: "none" }} />;
   }
 
   // Error state

@@ -160,6 +160,12 @@ export interface RoutingRule {
     targetOffers: Array<OfferWeight>;
     conditions: Array<Condition>;
 }
+export interface ErrorLog {
+    id: string;
+    context: string;
+    message: string;
+    timestamp: Time;
+}
 export interface ConversionEvent {
     id: string;
     status: ConversionStatus;
@@ -253,27 +259,27 @@ export interface backendInterface {
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     /**
-     * / *************  Campaigns **************
+     * / ************* Campaigns **************
      */
     createCampaign(name: string, trafficSourceId: string, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
     /**
-     * / *************  Domains **************
+     * / ************* Domains **************
      */
     createDomain(name: string, domainType: DomainType, status: DomainStatus): Promise<Domain>;
     /**
-     * / *************  Flows **************
+     * / ************* Flows **************
      */
     createFlow(name: string, campaignId: string, rules: Array<RoutingRule>): Promise<Flow>;
     /**
-     * / *************  Offers **************
+     * / ************* Offers **************
      */
     createOffer(name: string, url: string, payout: bigint, currency: string, status: OfferStatus): Promise<Offer>;
     /**
-     * / *************  Streams **************
+     * / ************* Streams **************
      */
     createStream(name: string, campaignId: string, offerId: string, weight: bigint, state: StreamState, position: bigint): Promise<Stream>;
     /**
-     * / *************  Traffic Sources **************
+     * / ************* Traffic Sources **************
      */
     createTrafficSource(name: string, postbackUrl: string, costModel: CostModel, parameters: Array<Parameter>): Promise<TrafficSource>;
     deleteCampaign(id: string): Promise<void>;
@@ -282,6 +288,7 @@ export interface backendInterface {
     deleteOffer(id: string): Promise<void>;
     deleteStream(id: string): Promise<void>;
     deleteTrafficSource(id: string): Promise<void>;
+    generateInviteToken(sessionToken: string): Promise<string>;
     getAllCampaigns(): Promise<Array<Campaign>>;
     getAllDomains(): Promise<Array<Domain>>;
     getAllDomainsByType(domainType: DomainType): Promise<Array<Domain>>;
@@ -290,7 +297,7 @@ export interface backendInterface {
     getAllStreams(): Promise<Array<Stream>>;
     getAllTrafficSources(): Promise<Array<TrafficSource>>;
     /**
-     * / *************  User Profiles **************
+     * / ************* User Profile Functions (Required by Frontend) **************
      */
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
@@ -300,30 +307,46 @@ export interface backendInterface {
     getClicksLog(page: bigint, pageSize: bigint): Promise<Array<ClickEvent>>;
     getConversionsLog(page: bigint, pageSize: bigint): Promise<Array<ConversionEvent>>;
     getDomain(id: string): Promise<Domain>;
+    getErrorLog(): Promise<Array<ErrorLog>>;
     getFlow(id: string): Promise<Flow>;
+    getMyProfile(sessionToken: string): Promise<{
+        displayName: string;
+        email: string;
+    }>;
     getOffer(id: string): Promise<Offer>;
     getStream(id: string): Promise<Stream>;
     getStreamsByCampaign(campaignId: string): Promise<Array<Stream>>;
     getTrafficSource(id: string): Promise<TrafficSource>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     /**
-     * / *************  Initialization **************
+     * / ************* Initialization **************
      */
     initialize(): Promise<void>;
     isCallerAdmin(): Promise<boolean>;
     /**
-     * / *************  Process Clicks **************
+     * / ************* Error Logging **************
+     */
+    logError(context: string, message: string): Promise<void>;
+    loginUser(email: string, passwordHash: string): Promise<string>;
+    logoutUser(sessionToken: string): Promise<void>;
+    /**
+     * / ************* Process Clicks **************
      */
     processClick(campaignKey: string, ipAddress: string, referrerUrl: string, landingPageUrl: string): Promise<ProcessClickResult>;
     /**
-     * / *************  Process Postbacks **************
+     * / ************* Process Postbacks **************
      */
     processPostback(clickId: string, offerId: string, payout: number, status: ConversionStatus): Promise<ConversionEvent>;
     /**
-     * / *************  Legacy Clicks **************
+     * / ************* Legacy Clicks **************
      */
     recordClick(campaignId: string, ipAddress: string, country: string, city: string, os: string, browser: string, deviceType: string, referrerUrl: string, landingPageUrl: string): Promise<ClickEvent>;
     recordConversion(clickId: string, campaignId: string, offerId: string, payout: number, revenue: bigint, status: ConversionStatus): Promise<ConversionEvent>;
+    /**
+     * / ************* User Authentication **************
+     */
+    registerFirstUser(email: string, passwordHash: string, displayName: string): Promise<string>;
+    registerWithInvite(inviteToken: string, email: string, passwordHash: string, displayName: string): Promise<string>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setProcessClickRandomValue(value: bigint): Promise<void>;
     updateCampaign(id: string, name: string, trafficSourceId: string, status: CampaignStatus, trackingDomain: string): Promise<Campaign>;
@@ -332,6 +355,10 @@ export interface backendInterface {
     updateOffer(id: string, name: string, url: string, payout: bigint, currency: string, status: OfferStatus): Promise<Offer>;
     updateStream(id: string, name: string, offerId: string, weight: bigint, state: StreamState, position: bigint): Promise<Stream>;
     updateTrafficSource(id: string, name: string, postbackUrl: string, costModel: CostModel, parameters: Array<Parameter>): Promise<TrafficSource>;
+    validateSession(sessionToken: string): Promise<{
+        displayName: string;
+        email: string;
+    }>;
 }
 import type { Campaign as _Campaign, CampaignStatus as _CampaignStatus, ConversionEvent as _ConversionEvent, ConversionStatus as _ConversionStatus, CostModel as _CostModel, Domain as _Domain, DomainStatus as _DomainStatus, DomainType as _DomainType, Offer as _Offer, OfferStatus as _OfferStatus, Parameter as _Parameter, ParameterType as _ParameterType, Stream as _Stream, StreamState as _StreamState, Time as _Time, TrafficSource as _TrafficSource, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -529,6 +556,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.deleteTrafficSource(arg0);
+            return result;
+        }
+    }
+    async generateInviteToken(arg0: string): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.generateInviteToken(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.generateInviteToken(arg0);
             return result;
         }
     }
@@ -742,6 +783,20 @@ export class Backend implements backendInterface {
             return from_candid_Domain_n13(this._uploadFile, this._downloadFile, result);
         }
     }
+    async getErrorLog(): Promise<Array<ErrorLog>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getErrorLog();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getErrorLog();
+            return result;
+        }
+    }
     async getFlow(arg0: string): Promise<Flow> {
         if (this.processError) {
             try {
@@ -753,6 +808,23 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.getFlow(arg0);
+            return result;
+        }
+    }
+    async getMyProfile(arg0: string): Promise<{
+        displayName: string;
+        email: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyProfile(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyProfile(arg0);
             return result;
         }
     }
@@ -854,6 +926,48 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async logError(arg0: string, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.logError(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.logError(arg0, arg1);
+            return result;
+        }
+    }
+    async loginUser(arg0: string, arg1: string): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.loginUser(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.loginUser(arg0, arg1);
+            return result;
+        }
+    }
+    async logoutUser(arg0: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.logoutUser(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.logoutUser(arg0);
+            return result;
+        }
+    }
     async processClick(arg0: string, arg1: string, arg2: string, arg3: string): Promise<ProcessClickResult> {
         if (this.processError) {
             try {
@@ -908,6 +1022,34 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.recordConversion(arg0, arg1, arg2, arg3, arg4, to_candid_ConversionStatus_n58(this._uploadFile, this._downloadFile, arg5));
             return from_candid_ConversionEvent_n54(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async registerFirstUser(arg0: string, arg1: string, arg2: string): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.registerFirstUser(arg0, arg1, arg2);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.registerFirstUser(arg0, arg1, arg2);
+            return result;
+        }
+    }
+    async registerWithInvite(arg0: string, arg1: string, arg2: string, arg3: string): Promise<string> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.registerWithInvite(arg0, arg1, arg2, arg3);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.registerWithInvite(arg0, arg1, arg2, arg3);
+            return result;
         }
     }
     async saveCallerUserProfile(arg0: UserProfile): Promise<void> {
@@ -1020,6 +1162,23 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.updateTrafficSource(arg0, arg1, arg2, to_candid_CostModel_n29(this._uploadFile, this._downloadFile, arg3), to_candid_vec_n31(this._uploadFile, this._downloadFile, arg4));
             return from_candid_TrafficSource_n36(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async validateSession(arg0: string): Promise<{
+        displayName: string;
+        email: string;
+    }> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.validateSession(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.validateSession(arg0);
+            return result;
         }
     }
 }

@@ -6,6 +6,7 @@ import {
   Activity,
   BarChart3,
   Globe,
+  KeyRound,
   Loader2,
   Mail,
   MousePointerClick,
@@ -23,22 +24,40 @@ interface LoginPageProps {
   onLoginSuccess?: () => void;
   /** When true, render a compact form-only layout (for modal usage) */
   compact?: boolean;
+  /** Pre-fill invite token from URL */
+  initialInviteToken?: string;
 }
 
 export default function LoginPage({
   onLoginSuccess,
   compact = false,
+  initialInviteToken = "",
 }: LoginPageProps) {
   const { login, isLoggingIn, loginStatus } = useInternetIdentity();
   const { loginWithEmail, registerWithEmail, emailUser } = useEmailAuth();
 
   // Email/password state
-  const [emailMode, setEmailMode] = useState<"login" | "register">("login");
+  const [emailMode, setEmailMode] = useState<"login" | "register">(
+    initialInviteToken ? "register" : "login",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [inviteToken, setInviteToken] = useState(initialInviteToken);
   const [isEmailSubmitting, setIsEmailSubmitting] = useState(false);
+
+  // Pre-fill invite token from URL ?invite=... param on mount
+  useEffect(() => {
+    if (!initialInviteToken) {
+      const params = new URLSearchParams(window.location.search);
+      const urlInvite = params.get("invite");
+      if (urlInvite) {
+        setInviteToken(urlInvite);
+        setEmailMode("register");
+      }
+    }
+  }, [initialInviteToken]);
 
   // Auto-close modal on successful email login
   useEffect(() => {
@@ -85,7 +104,12 @@ export default function LoginPage({
           setIsEmailSubmitting(false);
           return;
         }
-        await registerWithEmail(email.trim(), password, displayName.trim());
+        await registerWithEmail(
+          email.trim(),
+          password,
+          displayName.trim(),
+          inviteToken.trim() || undefined,
+        );
         toast.success("Account created successfully!");
       } else {
         await loginWithEmail(email.trim(), password);
@@ -99,7 +123,11 @@ export default function LoginPage({
   };
 
   const loginForm = (
-    <Tabs defaultValue="email" className="w-full">
+    <Tabs
+      value={emailMode === "login" ? "email" : "email"}
+      defaultValue="email"
+      className="w-full"
+    >
       <TabsList className="w-full mb-4">
         <TabsTrigger value="email" className="flex-1 gap-2">
           <Mail className="w-3.5 h-3.5" />
@@ -120,6 +148,7 @@ export default function LoginPage({
                 <Label htmlFor="displayName">Display Name *</Label>
                 <Input
                   id="displayName"
+                  data-ocid="auth.input"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Your name"
@@ -131,6 +160,7 @@ export default function LoginPage({
               <Label htmlFor="email">Email *</Label>
               <Input
                 id="email"
+                data-ocid="auth.input"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -142,6 +172,7 @@ export default function LoginPage({
               <Label htmlFor="password">Password *</Label>
               <Input
                 id="password"
+                data-ocid="auth.input"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -156,21 +187,50 @@ export default function LoginPage({
               />
             </div>
             {emailMode === "register" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="confirmPassword">Confirm Password *</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repeat password"
-                  autoComplete="new-password"
-                />
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                  <Input
+                    id="confirmPassword"
+                    data-ocid="auth.input"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repeat password"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="inviteToken"
+                    className="flex items-center gap-1.5"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
+                    Invite Token
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (leave empty if you are the first user)
+                    </span>
+                  </Label>
+                  <Input
+                    id="inviteToken"
+                    data-ocid="auth.input"
+                    value={inviteToken}
+                    onChange={(e) => setInviteToken(e.target.value)}
+                    placeholder="Paste invite token here..."
+                    autoComplete="off"
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Get this token from an existing admin. If you are the first
+                    user, leave it empty.
+                  </p>
+                </div>
+              </>
             )}
 
             <Button
               type="submit"
+              data-ocid="auth.submit_button"
               disabled={isEmailSubmitting}
               className="w-full"
               size="lg"
@@ -196,6 +256,7 @@ export default function LoginPage({
                 Don't have an account?{" "}
                 <button
                   type="button"
+                  data-ocid="auth.toggle"
                   onClick={() => {
                     setEmailMode("register");
                     setPassword("");
@@ -211,6 +272,7 @@ export default function LoginPage({
                 Already have an account?{" "}
                 <button
                   type="button"
+                  data-ocid="auth.toggle"
                   onClick={() => {
                     setEmailMode("login");
                     setPassword("");
@@ -241,6 +303,7 @@ export default function LoginPage({
 
           <Button
             onClick={login}
+            data-ocid="auth.submit_button"
             disabled={isLoggingIn}
             className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
             size="lg"
@@ -270,8 +333,7 @@ export default function LoginPage({
         <div>
           <h2 className="font-display text-2xl font-bold mb-1">Sign In</h2>
           <p className="text-sm text-muted-foreground">
-            Optional — use the app without signing in, or sign in to track
-            activity.
+            Sign in to access your tracking dashboard and manage campaigns.
           </p>
         </div>
         {loginForm}
@@ -345,10 +407,12 @@ export default function LoginPage({
         >
           <div>
             <h2 className="font-display text-3xl font-bold mb-2">
-              Welcome back
+              {emailMode === "register" ? "Create account" : "Welcome back"}
             </h2>
             <p className="text-muted-foreground">
-              Sign in to access your tracking dashboard
+              {emailMode === "register"
+                ? "Register to start tracking campaigns"
+                : "Sign in to access your tracking dashboard"}
             </p>
           </div>
 

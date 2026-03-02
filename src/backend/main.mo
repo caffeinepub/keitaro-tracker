@@ -13,11 +13,13 @@ import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
 
 
+// specify the data migration function in with-clause
+
 actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
-  /***************  Types ***************/
+  /*************** Types ***************/
   public type UserProfile = { name : Text };
   public type CostModel = { #cpc; #cpm; #cpa };
   public type ParameterType = { #text; #currency; #integer; #float; #percentage; #boolean };
@@ -42,8 +44,12 @@ actor {
   public type Domain = { id : Text; name : Text; domainType : DomainType; status : DomainStatus; createdAt : Time.Time; updatedAt : Time.Time };
   public type UserRole = { #admin; #user; #guest };
   public type ProcessClickResult = { clickId : Text; offerUrl : Text; campaignId : Text };
+  public type ErrorLog = { id : Text; context : Text; message : Text; timestamp : Time.Time };
+  public type Session = { token : Text; userEmail : Text; createdAt : Time.Time };
+  public type InviteToken = { token : Text; createdAt : Time.Time; used : Bool };
+  public type User = { email : Text; passwordHash : Text; displayName : Text; createdAt : Time.Time };
 
-  /***************  Helper Types ***************/
+  /*************** Helper Types ***************/
   type TrafficSourceKey = Text;
   type OfferKey = Text;
   type CampaignKey = Text;
@@ -51,7 +57,7 @@ actor {
   type DomainKey = Text;
   type StreamKey = Text;
 
-  /***************  ID Management ***************/
+  /*************** ID Management ***************/
   var idCounter = 0;
   func generateId(prefix : Text) : Text {
     let id = prefix # idCounter.toText();
@@ -59,7 +65,7 @@ actor {
     id;
   };
 
-  /***************  Storage ***************/
+  /*************** Storage ***************/
   let userProfiles = Map.empty<Principal, UserProfile>();
   let trafficSources = Map.empty<TrafficSourceKey, TrafficSource>();
   let offers = Map.empty<OfferKey, Offer>();
@@ -70,9 +76,38 @@ actor {
   var clicksArray = List.empty<ClickEvent>();
   var conversionsArray = List.empty<ConversionEvent>();
   var processClickRandomValue : Nat = 0;
+  let errorLogs = Map.empty<Text, ErrorLog>();
+  let sessions = Map.empty<Text, Session>();
+  let inviteTokens = Map.empty<Text, InviteToken>();
+  let users = Map.empty<Text, User>();
 
-  /***************  Initialization ***************/
+  /*************** User Profile Functions (Required by Frontend) ***************/
+  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view profiles");
+    };
+    userProfiles.get(caller);
+  };
+
+  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Can only view your own profile");
+    };
+    userProfiles.get(user);
+  };
+
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save profiles");
+    };
+    userProfiles.add(caller, profile);
+  };
+
+  /*************** Initialization ***************/
   public shared ({ caller }) func initialize() : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can initialize");
+    };
     if (domains.size() == 0) {
       domains.add("domain_0", { id = "domain_0"; name = "campaign.tracking.com"; domainType = #campaign; status = #active; createdAt = Time.now(); updatedAt = Time.now() });
       domains.add("domain_1", { id = "domain_1"; name = "postback.tracking.com"; domainType = #postback; status = #active; createdAt = Time.now(); updatedAt = Time.now() });
@@ -81,33 +116,128 @@ actor {
   };
 
   public shared ({ caller }) func setProcessClickRandomValue(value : Nat) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can set random value");
+    };
     processClickRandomValue := value;
   };
 
-  /***************  User Profiles ***************/
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    // Any authenticated user (including guests) can view their own profile
-    userProfiles.get(caller);
-  };
-
-  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    // Users can only view their own profile, admins can view any profile
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
-      Runtime.trap("Unauthorized: Can only view your own profile");
+  /*************** User Authentication ***************/
+  public shared ({ caller }) func registerFirstUser(email : Text, passwordHash : Text, displayName : Text) : async Text {
+    if (users.size() > 0) {
+      Runtime.trap("First user can only be created if no users exist");
     };
-    userProfiles.get(user);
+    let newUser : User = { email; passwordHash; displayName; createdAt = Time.now() };
+    users.add(email, newUser);
+    let sessionToken = generateId("session_");
+    let session : Session = { token = sessionToken; userEmail = email; createdAt = Time.now() };
+    sessions.add(sessionToken, session);
+    sessionToken;
   };
 
-  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    // Only authenticated users (not guests) can save profiles
+  public shared ({ caller }) func registerWithInvite(inviteToken : Text, email : Text, passwordHash : Text, displayName : Text) : async Text {
+    switch (inviteTokens.get(inviteToken)) {
+      case (null) { Runtime.trap("Invalid invite token") };
+      case (?token) {
+        if (token.used) {
+          Runtime.trap("Invite token already used");
+        };
+        let newUser : User = { email; passwordHash; displayName; createdAt = Time.now() };
+        users.add(email, newUser);
+        let sessionToken = generateId("session_");
+        let session : Session = { token = sessionToken; userEmail = email; createdAt = Time.now() };
+        sessions.add(sessionToken, session);
+        let updatedToken : InviteToken = { token = token.token; createdAt = token.createdAt; used = true };
+        inviteTokens.add(inviteToken, updatedToken);
+        sessionToken;
+      };
+    };
+  };
+
+  public shared ({ caller }) func loginUser(email : Text, passwordHash : Text) : async Text {
+    switch (users.get(email)) {
+      case (null) { Runtime.trap("User not found") };
+      case (?user) {
+        if (user.passwordHash != passwordHash) {
+          Runtime.trap("Invalid credentials");
+        };
+        let sessionToken = generateId("session_");
+        let session : Session = { token = sessionToken; userEmail = email; createdAt = Time.now() };
+        sessions.add(sessionToken, session);
+        sessionToken;
+      };
+    };
+  };
+
+  public shared ({ caller }) func logoutUser(sessionToken : Text) : async () {
+    switch (sessions.get(sessionToken)) {
+      case (null) { Runtime.trap("Session not found") };
+      case (?_) { sessions.remove(sessionToken) };
+    };
+  };
+
+  public query ({ caller }) func validateSession(sessionToken : Text) : async { email : Text; displayName : Text } {
+    switch (sessions.get(sessionToken)) {
+      case (null) { Runtime.trap("Invalid session token") };
+      case (?session) {
+        switch (users.get(session.userEmail)) {
+          case (null) { Runtime.trap("User not found") };
+          case (?user) {
+            { email = user.email; displayName = user.displayName };
+          };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func generateInviteToken(sessionToken : Text) : async Text {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can generate invite tokens");
+    };
+    switch (sessions.get(sessionToken)) {
+      case (null) { Runtime.trap("Invalid session token") };
+      case (?_) {
+        let inviteToken = generateId("invite_");
+        let token : InviteToken = { token = inviteToken; createdAt = Time.now(); used = false };
+        inviteTokens.add(inviteToken, token);
+        inviteToken;
+      };
+    };
+  };
+
+  public query ({ caller }) func getMyProfile(sessionToken : Text) : async { email : Text; displayName : Text } {
+    switch (sessions.get(sessionToken)) {
+      case (null) { Runtime.trap("Invalid session token") };
+      case (?session) {
+        switch (users.get(session.userEmail)) {
+          case (null) { Runtime.trap("User not found") };
+          case (?user) {
+            { email = user.email; displayName = user.displayName };
+          };
+        };
+      };
+    };
+  };
+
+  /*************** Error Logging ***************/
+  // Public endpoint - no auth required (explicitly stated in spec)
+  public shared ({ caller }) func logError(context : Text, message : Text) : async () {
+    let errorLog : ErrorLog = { id = generateId("error_"); context; message; timestamp = Time.now() };
+    errorLogs.add(errorLog.id, errorLog);
+  };
+
+  public query ({ caller }) func getErrorLog() : async [ErrorLog] {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
+      Runtime.trap("Unauthorized: Only users can view error logs");
     };
-    userProfiles.add(caller, profile);
+    errorLogs.values().toArray();
   };
 
-  /***************  Traffic Sources ***************/
+  /*************** Traffic Sources ***************/
   public shared ({ caller }) func createTrafficSource(name : Text, postbackUrl : Text, costModel : CostModel, parameters : [Parameter]) : async TrafficSource {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create traffic sources");
+    };
     Validation.isValidTrafficSourceInput(name, postbackUrl);
     let id = generateId("traf_");
     let ts : TrafficSource = { id; name; postbackUrl; costModel; parameters; createdAt = Time.now(); updatedAt = Time.now() };
@@ -116,6 +246,9 @@ actor {
   };
 
   public shared ({ caller }) func updateTrafficSource(id : Text, name : Text, postbackUrl : Text, costModel : CostModel, parameters : [Parameter]) : async TrafficSource {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update traffic sources");
+    };
     Validation.isValidTrafficSourceInput(name, postbackUrl);
     switch (trafficSources.get(id)) {
       case (null) { Runtime.trap("Traffic source not found") };
@@ -128,6 +261,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteTrafficSource(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete traffic sources");
+    };
     switch (trafficSources.get(id)) {
       case (null) { Runtime.trap("Traffic source not found") };
       case (?_) { trafficSources.remove(id) };
@@ -135,6 +271,9 @@ actor {
   };
 
   public query ({ caller }) func getTrafficSource(id : Text) : async TrafficSource {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view traffic sources");
+    };
     switch (trafficSources.get(id)) {
       case (null) { Runtime.trap("Traffic source not found") };
       case (?ts) { ts };
@@ -142,11 +281,17 @@ actor {
   };
 
   public query ({ caller }) func getAllTrafficSources() : async [TrafficSource] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view traffic sources");
+    };
     trafficSources.values().toArray();
   };
 
-  /***************  Offers ***************/
+  /*************** Offers ***************/
   public shared ({ caller }) func createOffer(name : Text, url : Text, payout : Nat, currency : Text, status : OfferStatus) : async Offer {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create offers");
+    };
     let id = generateId("offer_");
     let offer : Offer = { id; name; url; payout; currency; status; createdAt = Time.now(); updatedAt = Time.now() };
     offers.add(id, offer);
@@ -154,6 +299,9 @@ actor {
   };
 
   public shared ({ caller }) func updateOffer(id : Text, name : Text, url : Text, payout : Nat, currency : Text, status : OfferStatus) : async Offer {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update offers");
+    };
     switch (offers.get(id)) {
       case (null) { Runtime.trap("Offer not found") };
       case (?existing) {
@@ -165,6 +313,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteOffer(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete offers");
+    };
     switch (offers.get(id)) {
       case (null) { Runtime.trap("Offer not found") };
       case (?_) { offers.remove(id) };
@@ -172,6 +323,9 @@ actor {
   };
 
   public query ({ caller }) func getOffer(id : Text) : async Offer {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view offers");
+    };
     switch (offers.get(id)) {
       case (null) { Runtime.trap("Offer not found") };
       case (?offer) { offer };
@@ -179,11 +333,17 @@ actor {
   };
 
   public query ({ caller }) func getAllOffers() : async [Offer] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view offers");
+    };
     offers.values().toArray();
   };
 
-  /***************  Campaigns ***************/
+  /*************** Campaigns ***************/
   public shared ({ caller }) func createCampaign(name : Text, trafficSourceId : Text, status : CampaignStatus, trackingDomain : Text) : async Campaign {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create campaigns");
+    };
     let campaignKey = "static_key";
     let id = generateId("camp_");
     let campaign : Campaign = { id; name; trafficSourceId; status; trackingDomain; campaignKey; createdAt = Time.now(); updatedAt = Time.now() };
@@ -192,6 +352,9 @@ actor {
   };
 
   public shared ({ caller }) func updateCampaign(id : Text, name : Text, trafficSourceId : Text, status : CampaignStatus, trackingDomain : Text) : async Campaign {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update campaigns");
+    };
     switch (campaigns.get(id)) {
       case (null) { Runtime.trap("Campaign not found") };
       case (?existing) {
@@ -211,6 +374,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteCampaign(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete campaigns");
+    };
     switch (campaigns.get(id)) {
       case (null) { Runtime.trap("Campaign not found") };
       case (?_) {
@@ -227,6 +393,9 @@ actor {
   };
 
   public query ({ caller }) func getCampaign(id : Text) : async Campaign {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view campaigns");
+    };
     switch (campaigns.get(id)) {
       case (null) { Runtime.trap("Campaign not found") };
       case (?campaign) { campaign };
@@ -234,6 +403,9 @@ actor {
   };
 
   public query ({ caller }) func getCampaignByKey(campaignKey : Text) : async Campaign {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view campaigns");
+    };
     let campaignOption = campaigns.values().toArray().find(func(c) { c.campaignKey == campaignKey });
     switch (campaignOption) {
       case (null) { Runtime.trap("Campaign not found") };
@@ -242,11 +414,17 @@ actor {
   };
 
   public query ({ caller }) func getAllCampaigns() : async [Campaign] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view campaigns");
+    };
     campaigns.values().toArray();
   };
 
-  /***************  Flows ***************/
+  /*************** Flows ***************/
   public shared ({ caller }) func createFlow(name : Text, campaignId : Text, rules : [RoutingRule]) : async Flow {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create flows");
+    };
     let id = generateId("flow_");
     let flow : Flow = { id; name; campaignId; rules; createdAt = Time.now(); updatedAt = Time.now() };
     flows.add(id, flow);
@@ -254,6 +432,9 @@ actor {
   };
 
   public shared ({ caller }) func updateFlow(id : Text, name : Text, campaignId : Text, rules : [RoutingRule]) : async Flow {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update flows");
+    };
     switch (flows.get(id)) {
       case (null) { Runtime.trap("Flow not found") };
       case (?existing) {
@@ -265,6 +446,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteFlow(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete flows");
+    };
     switch (flows.get(id)) {
       case (null) { Runtime.trap("Flow not found") };
       case (?_) { flows.remove(id) };
@@ -272,6 +456,9 @@ actor {
   };
 
   public query ({ caller }) func getFlow(id : Text) : async Flow {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view flows");
+    };
     switch (flows.get(id)) {
       case (null) { Runtime.trap("Flow not found") };
       case (?flow) { flow };
@@ -279,11 +466,17 @@ actor {
   };
 
   public query ({ caller }) func getAllFlows() : async [Flow] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view flows");
+    };
     flows.values().toArray();
   };
 
-  /***************  Streams ***************/
+  /*************** Streams ***************/
   public shared ({ caller }) func createStream(name : Text, campaignId : Text, offerId : Text, weight : Nat, state : StreamState, position : Nat) : async Stream {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create streams");
+    };
     switch (campaigns.get(campaignId)) {
       case (null) { Runtime.trap("Campaign does not exist") };
       case (?_) {
@@ -296,6 +489,9 @@ actor {
   };
 
   public shared ({ caller }) func updateStream(id : Text, name : Text, offerId : Text, weight : Nat, state : StreamState, position : Nat) : async Stream {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update streams");
+    };
     switch (streams.get(id)) {
       case (null) { Runtime.trap("Stream not found") };
       case (?existing) {
@@ -307,6 +503,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteStream(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete streams");
+    };
     switch (streams.get(id)) {
       case (null) { Runtime.trap("Stream not found") };
       case (?_) { streams.remove(id) };
@@ -314,6 +513,9 @@ actor {
   };
 
   public query ({ caller }) func getStream(id : Text) : async Stream {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view streams");
+    };
     switch (streams.get(id)) {
       case (null) { Runtime.trap("Stream not found") };
       case (?stream) { stream };
@@ -321,15 +523,22 @@ actor {
   };
 
   public query ({ caller }) func getStreamsByCampaign(campaignId : Text) : async [Stream] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view streams");
+    };
     let allStreams = streams.values().toArray();
     allStreams.filter(func(stream) { stream.campaignId == campaignId });
   };
 
   public query ({ caller }) func getAllStreams() : async [Stream] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view streams");
+    };
     streams.values().toArray();
   };
 
-  /***************  Process Clicks ***************/
+  /*************** Process Clicks ***************/
+  // Public endpoint - called by external tracking systems, no auth required
   public shared ({ caller }) func processClick(campaignKey : Text, ipAddress : Text, referrerUrl : Text, landingPageUrl : Text) : async ProcessClickResult {
     let campaignsArray = campaigns.values().toArray();
     let campaignOption = campaignsArray.find(func(c) { c.campaignKey == campaignKey });
@@ -376,7 +585,8 @@ actor {
     result;
   };
 
-  /***************  Process Postbacks ***************/
+  /*************** Process Postbacks ***************/
+  // Public endpoint - called by external affiliate networks, no auth required
   public shared ({ caller }) func processPostback(clickId : Text, offerId : Text, payout : Float, status : ConversionStatus) : async ConversionEvent {
     let clickEvents = clicksArray.toArray();
     let clickOption = clickEvents.find(func(click) { click.id == clickId });
@@ -392,8 +602,11 @@ actor {
     conversion;
   };
 
-  /***************  Legacy Clicks ***************/
+  /*************** Legacy Clicks ***************/
   public shared ({ caller }) func recordClick(campaignId : Text, ipAddress : Text, country : Text, city : Text, os : Text, browser : Text, deviceType : Text, referrerUrl : Text, landingPageUrl : Text) : async ClickEvent {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can record clicks");
+    };
     let id = generateId("click_");
     let click : ClickEvent = { id; campaignId; ipAddress; country; city; os; browser; deviceType; referrerUrl; landingPageUrl; timestamp = Time.now(); uniqueClickId = id };
     clicksArray.add(click);
@@ -401,6 +614,9 @@ actor {
   };
 
   public shared ({ caller }) func recordConversion(clickId : Text, campaignId : Text, offerId : Text, payout : Float, revenue : Nat, status : ConversionStatus) : async ConversionEvent {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can record conversions");
+    };
     let id = generateId("conv_");
     let conversion : ConversionEvent = { id; clickId; campaignId; offerId; payout; revenue; timestamp = Time.now(); status };
     conversionsArray.add(conversion);
@@ -408,10 +624,16 @@ actor {
   };
 
   public query ({ caller }) func getCampaignStats() : async [CampaignStats] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view campaign stats");
+    };
     [];
   };
 
   public query ({ caller }) func getClicksLog(page : Nat, pageSize : Nat) : async [ClickEvent] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view clicks log");
+    };
     let clicksArr = clicksArray.toArray();
     let start = page * pageSize;
     if (start >= clicksArr.size()) { return [] };
@@ -420,6 +642,9 @@ actor {
   };
 
   public query ({ caller }) func getConversionsLog(page : Nat, pageSize : Nat) : async [ConversionEvent] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view conversions log");
+    };
     let conversionsArr = conversionsArray.toArray();
     let start = page * pageSize;
     if (start >= conversionsArr.size()) { return [] };
@@ -427,8 +652,11 @@ actor {
     Array.tabulate<ConversionEvent>(end - start, func(i) { conversionsArr[start + i] });
   };
 
-  /***************  Domains ***************/
+  /*************** Domains ***************/
   public shared ({ caller }) func createDomain(name : Text, domainType : DomainType, status : DomainStatus) : async Domain {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can create domains");
+    };
     Validation.isValidDomainInput(name);
     let id = generateId("domain_");
     let domain : Domain = { id; name; domainType; status; createdAt = Time.now(); updatedAt = Time.now() };
@@ -437,6 +665,9 @@ actor {
   };
 
   public shared ({ caller }) func updateDomain(id : Text, name : Text, domainType : DomainType, status : DomainStatus) : async Domain {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can update domains");
+    };
     Validation.isValidDomainInput(name);
     switch (domains.get(id)) {
       case (null) { Runtime.trap("Domain not found") };
@@ -449,6 +680,9 @@ actor {
   };
 
   public shared ({ caller }) func deleteDomain(id : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can delete domains");
+    };
     switch (domains.get(id)) {
       case (null) { Runtime.trap("Domain not found") };
       case (?_) { domains.remove(id) };
@@ -456,6 +690,9 @@ actor {
   };
 
   public query ({ caller }) func getDomain(id : Text) : async Domain {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view domains");
+    };
     switch (domains.get(id)) {
       case (null) { Runtime.trap("Domain not found") };
       case (?domain) { domain };
@@ -463,10 +700,16 @@ actor {
   };
 
   public query ({ caller }) func getAllDomains() : async [Domain] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view domains");
+    };
     domains.values().toArray();
   };
 
   public query ({ caller }) func getAllDomainsByType(domainType : DomainType) : async [Domain] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can view domains");
+    };
     let allDomains = domains.values().toArray();
     allDomains.filter(func(domain) { domain.domainType == domainType });
   };

@@ -165,6 +165,12 @@ export const ConversionEvent = IDL.Record({
   'payout' : IDL.Float64,
   'clickId' : IDL.Text,
 });
+export const ErrorLog = IDL.Record({
+  'id' : IDL.Text,
+  'context' : IDL.Text,
+  'message' : IDL.Text,
+  'timestamp' : Time,
+});
 export const ProcessClickResult = IDL.Record({
   'campaignId' : IDL.Text,
   'offerUrl' : IDL.Text,
@@ -206,6 +212,7 @@ export const idlService = IDL.Service({
   'deleteOffer' : IDL.Func([IDL.Text], [], []),
   'deleteStream' : IDL.Func([IDL.Text], [], []),
   'deleteTrafficSource' : IDL.Func([IDL.Text], [], []),
+  'generateInviteToken' : IDL.Func([IDL.Text], [IDL.Text], []),
   'getAllCampaigns' : IDL.Func([], [IDL.Vec(Campaign)], ['query']),
   'getAllDomains' : IDL.Func([], [IDL.Vec(Domain)], ['query']),
   'getAllDomainsByType' : IDL.Func([DomainType], [IDL.Vec(Domain)], ['query']),
@@ -229,7 +236,13 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getDomain' : IDL.Func([IDL.Text], [Domain], ['query']),
+  'getErrorLog' : IDL.Func([], [IDL.Vec(ErrorLog)], ['query']),
   'getFlow' : IDL.Func([IDL.Text], [Flow], ['query']),
+  'getMyProfile' : IDL.Func(
+      [IDL.Text],
+      [IDL.Record({ 'displayName' : IDL.Text, 'email' : IDL.Text })],
+      ['query'],
+    ),
   'getOffer' : IDL.Func([IDL.Text], [Offer], ['query']),
   'getStream' : IDL.Func([IDL.Text], [Stream], ['query']),
   'getStreamsByCampaign' : IDL.Func([IDL.Text], [IDL.Vec(Stream)], ['query']),
@@ -241,6 +254,9 @@ export const idlService = IDL.Service({
     ),
   'initialize' : IDL.Func([], [], []),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'logError' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'loginUser' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+  'logoutUser' : IDL.Func([IDL.Text], [], []),
   'processClick' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
       [ProcessClickResult],
@@ -269,6 +285,16 @@ export const idlService = IDL.Service({
   'recordConversion' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Text, IDL.Float64, IDL.Nat, ConversionStatus],
       [ConversionEvent],
+      [],
+    ),
+  'registerFirstUser' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text],
+      [],
+    ),
+  'registerWithInvite' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Text],
       [],
     ),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
@@ -302,6 +328,11 @@ export const idlService = IDL.Service({
       [IDL.Text, IDL.Text, IDL.Text, CostModel, IDL.Vec(Parameter)],
       [TrafficSource],
       [],
+    ),
+  'validateSession' : IDL.Func(
+      [IDL.Text],
+      [IDL.Record({ 'displayName' : IDL.Text, 'email' : IDL.Text })],
+      ['query'],
     ),
 });
 
@@ -456,6 +487,12 @@ export const idlFactory = ({ IDL }) => {
     'payout' : IDL.Float64,
     'clickId' : IDL.Text,
   });
+  const ErrorLog = IDL.Record({
+    'id' : IDL.Text,
+    'context' : IDL.Text,
+    'message' : IDL.Text,
+    'timestamp' : Time,
+  });
   const ProcessClickResult = IDL.Record({
     'campaignId' : IDL.Text,
     'offerUrl' : IDL.Text,
@@ -501,6 +538,7 @@ export const idlFactory = ({ IDL }) => {
     'deleteOffer' : IDL.Func([IDL.Text], [], []),
     'deleteStream' : IDL.Func([IDL.Text], [], []),
     'deleteTrafficSource' : IDL.Func([IDL.Text], [], []),
+    'generateInviteToken' : IDL.Func([IDL.Text], [IDL.Text], []),
     'getAllCampaigns' : IDL.Func([], [IDL.Vec(Campaign)], ['query']),
     'getAllDomains' : IDL.Func([], [IDL.Vec(Domain)], ['query']),
     'getAllDomainsByType' : IDL.Func(
@@ -528,7 +566,13 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getDomain' : IDL.Func([IDL.Text], [Domain], ['query']),
+    'getErrorLog' : IDL.Func([], [IDL.Vec(ErrorLog)], ['query']),
     'getFlow' : IDL.Func([IDL.Text], [Flow], ['query']),
+    'getMyProfile' : IDL.Func(
+        [IDL.Text],
+        [IDL.Record({ 'displayName' : IDL.Text, 'email' : IDL.Text })],
+        ['query'],
+      ),
     'getOffer' : IDL.Func([IDL.Text], [Offer], ['query']),
     'getStream' : IDL.Func([IDL.Text], [Stream], ['query']),
     'getStreamsByCampaign' : IDL.Func([IDL.Text], [IDL.Vec(Stream)], ['query']),
@@ -540,6 +584,9 @@ export const idlFactory = ({ IDL }) => {
       ),
     'initialize' : IDL.Func([], [], []),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'logError' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'loginUser' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+    'logoutUser' : IDL.Func([IDL.Text], [], []),
     'processClick' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
         [ProcessClickResult],
@@ -568,6 +615,16 @@ export const idlFactory = ({ IDL }) => {
     'recordConversion' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Text, IDL.Float64, IDL.Nat, ConversionStatus],
         [ConversionEvent],
+        [],
+      ),
+    'registerFirstUser' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text],
+        [],
+      ),
+    'registerWithInvite' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Text],
         [],
       ),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
@@ -601,6 +658,11 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Text, IDL.Text, IDL.Text, CostModel, IDL.Vec(Parameter)],
         [TrafficSource],
         [],
+      ),
+    'validateSession' : IDL.Func(
+        [IDL.Text],
+        [IDL.Record({ 'displayName' : IDL.Text, 'email' : IDL.Text })],
+        ['query'],
       ),
   });
 };

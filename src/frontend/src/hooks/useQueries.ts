@@ -10,6 +10,7 @@ import type {
   Domain,
   DomainStatus,
   DomainType,
+  ErrorLog,
   Flow,
   Offer,
   OfferStatus,
@@ -665,5 +666,19 @@ export function useProcessClick() {
         args.landingPageUrl,
       );
     },
+  });
+}
+
+// ── Error Log ─────────────────────────────────────────────────────────────────
+
+export function useGetErrorLog() {
+  const { actor, isFetching } = useActor();
+  return useQuery<ErrorLog[]>({
+    queryKey: ["errorLog"],
+    queryFn: async () => {
+      if (!actor) return [];
+      return actor.getErrorLog();
+    },
+    enabled: !!actor && !isFetching,
   });
 }

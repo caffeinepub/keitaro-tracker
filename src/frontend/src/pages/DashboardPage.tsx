@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/table";
 import {
   Activity,
-  ArrowUpRight,
   BarChart3,
   DollarSign,
   MousePointerClick,
@@ -19,50 +18,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { motion } from "motion/react";
-import type { CampaignStats } from "../backend.d";
 import { useGetAllCampaigns, useGetCampaignStats } from "../hooks/useQueries";
-
-const SAMPLE_STATS: CampaignStats[] = [
-  {
-    campaignId: "sample-1",
-    clicks: BigInt(12450),
-    uniqueClicks: BigInt(9820),
-    conversions: BigInt(342),
-    conversionRate: BigInt(275),
-    revenue: BigInt(1895000),
-    cost: BigInt(420000),
-    roi: BigInt(35100),
-    epc: BigInt(152),
-  },
-  {
-    campaignId: "sample-2",
-    clicks: BigInt(8930),
-    uniqueClicks: BigInt(7210),
-    conversions: BigInt(198),
-    conversionRate: BigInt(221),
-    revenue: BigInt(1240000),
-    cost: BigInt(310000),
-    roi: BigInt(30000),
-    epc: BigInt(138),
-  },
-  {
-    campaignId: "sample-3",
-    clicks: BigInt(5670),
-    uniqueClicks: BigInt(4890),
-    conversions: BigInt(89),
-    conversionRate: BigInt(157),
-    revenue: BigInt(623000),
-    cost: BigInt(198000),
-    roi: BigInt(21464),
-    epc: BigInt(109),
-  },
-];
-
-const SAMPLE_CAMPAIGNS: Record<string, string> = {
-  "sample-1": "US Finance Offers",
-  "sample-2": "EU E-commerce Flow",
-  "sample-3": "Asia Mobile Push",
-};
 
 function formatMoney(cents: bigint): string {
   return (Number(cents) / 100).toLocaleString("en-US", {
@@ -85,11 +41,11 @@ interface StatCardProps {
   title: string;
   value: string;
   icon: React.ComponentType<{ className?: string }>;
-  trend?: string;
+  loading?: boolean;
   index: number;
 }
 
-function StatCard({ title, value, icon: Icon, trend, index }: StatCardProps) {
+function StatCard({ title, value, icon: Icon, loading, index }: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -99,16 +55,14 @@ function StatCard({ title, value, icon: Icon, trend, index }: StatCardProps) {
       <Card className="bg-card border-border">
         <CardContent className="p-5">
           <div className="flex items-start justify-between">
-            <div className="space-y-1">
+            <div className="space-y-1 flex-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 {title}
               </p>
-              <p className="font-display text-2xl font-bold">{value}</p>
-              {trend && (
-                <p className="text-xs text-success flex items-center gap-1">
-                  <ArrowUpRight className="w-3 h-3" />
-                  {trend}
-                </p>
+              {loading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <p className="font-display text-2xl font-bold">{value}</p>
               )}
             </div>
             <div className="p-2 bg-primary/10 rounded-lg">
@@ -123,12 +77,14 @@ function StatCard({ title, value, icon: Icon, trend, index }: StatCardProps) {
 
 export default function DashboardPage() {
   const { data: statsData, isLoading: statsLoading } = useGetCampaignStats();
-  const { data: campaigns } = useGetAllCampaigns();
+  const { data: campaigns, isLoading: campaignsLoading } = useGetAllCampaigns();
 
-  const stats = statsData && statsData.length > 0 ? statsData : SAMPLE_STATS;
+  const loading = statsLoading || campaignsLoading;
+
+  const stats = statsData ?? [];
   const campaignNameMap = campaigns
     ? Object.fromEntries(campaigns.map((c) => [c.id, c.name]))
-    : SAMPLE_CAMPAIGNS;
+    : {};
 
   const totals = stats.reduce(
     (acc, s) => ({
@@ -143,41 +99,70 @@ export default function DashboardPage() {
   const totalROI =
     totals.cost > 0
       ? `${(((totals.revenue - totals.cost) / totals.cost) * 100).toFixed(2)}%`
-      : "0%";
+      : "—";
+
+  const activeCampaigns = campaigns
+    ? campaigns.filter(
+        (c) =>
+          typeof c.status === "object" &&
+          c.status !== null &&
+          "active" in (c.status as Record<string, unknown>),
+      )
+    : [];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" data-ocid="dashboard.page">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div
+        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+        data-ocid="dashboard.stats.section"
+      >
         <StatCard
           title="Total Clicks"
           value={totals.clicks.toLocaleString("en-US")}
           icon={MousePointerClick}
-          trend="+12.5% vs last week"
+          loading={loading}
           index={0}
         />
         <StatCard
           title="Conversions"
           value={totals.conversions.toLocaleString("en-US")}
           icon={Activity}
-          trend="+8.3% vs last week"
+          loading={loading}
           index={1}
         />
         <StatCard
           title="Total Revenue"
-          value={formatMoney(BigInt(totals.revenue))}
+          value={loading ? "—" : formatMoney(BigInt(totals.revenue))}
           icon={DollarSign}
-          trend="+15.2% vs last week"
+          loading={loading}
           index={2}
         />
         <StatCard
           title="Overall ROI"
-          value={totalROI}
+          value={loading ? "—" : totalROI}
           icon={TrendingUp}
-          trend="+3.1% vs last week"
+          loading={loading}
           index={3}
         />
       </div>
+
+      {/* Active Campaigns Count */}
+      {!loading && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28, duration: 0.3 }}
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <Activity className="w-4 h-4 text-success" />
+          <span>
+            {activeCampaigns.length} active campaign
+            {activeCampaigns.length !== 1 ? "s" : ""} out of{" "}
+            {(campaigns ?? []).length} total
+          </span>
+        </motion.div>
+      )}
 
       {/* Campaign Stats Table */}
       <motion.div
@@ -192,18 +177,33 @@ export default function DashboardPage() {
             </CardTitle>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <BarChart3 className="w-3.5 h-3.5" />
-              <span>Top campaigns by revenue</span>
+              <span>Real-time data</span>
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {statsLoading ? (
-              <div className="p-5 space-y-3">
+            {loading ? (
+              <div
+                className="p-5 space-y-3"
+                data-ocid="dashboard.table.loading_state"
+              >
                 {["a", "b", "c", "d", "e"].map((k) => (
                   <Skeleton key={k} className="h-9 w-full" />
                 ))}
               </div>
+            ) : stats.length === 0 ? (
+              <div
+                className="flex flex-col items-center gap-2 py-16 text-muted-foreground"
+                data-ocid="dashboard.table.empty_state"
+              >
+                <BarChart3 className="w-10 h-10 opacity-25" />
+                <p className="text-sm font-medium">No campaign data yet</p>
+                <p className="text-xs text-center max-w-xs">
+                  Create campaigns and add streams with offers — clicks and
+                  conversions will appear here automatically.
+                </p>
+              </div>
             ) : (
-              <Table>
+              <Table data-ocid="dashboard.campaigns.table">
                 <TableHeader>
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="text-xs font-medium text-muted-foreground pl-5">
@@ -236,73 +236,57 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stats.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={9}
-                        className="text-center py-12 text-muted-foreground"
+                  {stats.map((stat, idx) => {
+                    const roi = Number(stat.roi) * 0.01;
+                    const roiPositive = roi >= 0;
+                    return (
+                      <TableRow
+                        key={stat.campaignId}
+                        className="border-border hover:bg-accent/30 transition-colors"
+                        data-ocid={`dashboard.campaigns.row.${idx + 1}`}
                       >
-                        <div className="flex flex-col items-center gap-2">
-                          <BarChart3 className="w-8 h-8 opacity-30" />
-                          <p className="text-sm">No campaign data yet</p>
-                          <p className="text-xs">
-                            Create campaigns to see statistics here
-                          </p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    stats.map((stat) => {
-                      const roi = Number(stat.roi) * 0.01;
-                      const roiPositive = roi >= 0;
-                      return (
-                        <TableRow
-                          key={stat.campaignId}
-                          className="border-border hover:bg-accent/30 transition-colors"
-                        >
-                          <TableCell className="pl-5 font-medium text-sm">
-                            {campaignNameMap[stat.campaignId] ??
-                              stat.campaignId.slice(0, 8)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {formatNumber(stat.clicks)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                            {formatNumber(stat.uniqueClicks)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {formatNumber(stat.conversions)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-mono text-sm text-info">
-                              {formatPercent(stat.conversionRate)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm text-success">
-                            {formatMoney(stat.revenue)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                            {formatMoney(stat.cost)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Badge
-                              variant="outline"
-                              className={`font-mono text-xs ${roiPositive ? "border-success/30 text-success" : "border-destructive/30 text-destructive"}`}
-                            >
-                              {roiPositive ? "+" : ""}
-                              {roi.toFixed(2)}%
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm pr-5">
-                            <span className="flex items-center justify-end gap-1">
-                              <Percent className="w-3 h-3 text-muted-foreground" />
-                              ${(Number(stat.epc) / 100).toFixed(2)}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
+                        <TableCell className="pl-5 font-medium text-sm">
+                          {campaignNameMap[stat.campaignId] ??
+                            stat.campaignId.slice(0, 8)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {formatNumber(stat.clicks)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                          {formatNumber(stat.uniqueClicks)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm">
+                          {formatNumber(stat.conversions)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className="font-mono text-sm text-info">
+                            {formatPercent(stat.conversionRate)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm text-success">
+                          {formatMoney(stat.revenue)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                          {formatMoney(stat.cost)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge
+                            variant="outline"
+                            className={`font-mono text-xs ${roiPositive ? "border-success/30 text-success" : "border-destructive/30 text-destructive"}`}
+                          >
+                            {roiPositive ? "+" : ""}
+                            {roi.toFixed(2)}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-sm pr-5">
+                          <span className="flex items-center justify-end gap-1">
+                            <Percent className="w-3 h-3 text-muted-foreground" />
+                            ${(Number(stat.epc) / 100).toFixed(2)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}

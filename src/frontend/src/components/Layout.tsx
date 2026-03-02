@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -12,18 +13,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Copy,
+  ExternalLink,
   GitBranch,
   Globe,
   LayoutDashboard,
+  Link2,
+  Loader2,
   LogIn,
   LogOut,
   MousePointerClick,
@@ -36,6 +43,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import type { UserProfile } from "../backend.d";
 import type { EmailUser } from "../contexts/EmailAuthContext";
 import { useEmailAuth } from "../contexts/EmailAuthContext";
@@ -47,6 +55,7 @@ import ClicksLogPage from "../pages/ClicksLogPage";
 import ConversionsLogPage from "../pages/ConversionsLogPage";
 import DashboardPage from "../pages/DashboardPage";
 import DomainsPage from "../pages/DomainsPage";
+import ErrorLogPage from "../pages/ErrorLogPage";
 import FlowsPage from "../pages/FlowsPage";
 import LoginPage from "../pages/LoginPage";
 import OffersPage from "../pages/OffersPage";
@@ -61,6 +70,7 @@ type Page =
   | "flows"
   | "domains"
   | "activity-log"
+  | "error-log"
   | "clicks"
   | "conversions"
   | "reports";
@@ -87,6 +97,7 @@ const navItems = [
   { id: "clicks" as Page, label: "Clicks Log", icon: MousePointerClick },
   { id: "conversions" as Page, label: "Conversions", icon: Repeat2 },
   { id: "reports" as Page, label: "Reports", icon: BarChart3 },
+  { id: "error-log" as Page, label: "Error Log", icon: AlertTriangle },
 ];
 
 // Parse hash for click route: #/click/:campaignKey
@@ -107,8 +118,14 @@ export default function Layout({
   const [clickCampaignKey, setClickCampaignKey] = useState<string | null>(
     getClickCampaignKey,
   );
+
+  // Invite dialog state
+  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState("");
+  const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
+
   const { identity, clear } = useInternetIdentity();
-  const { logoutEmail } = useEmailAuth();
+  const { logoutEmail, generateInvite } = useEmailAuth();
   const queryClient = useQueryClient();
 
   // Listen for hash changes (in case of back/forward navigation)
@@ -124,12 +141,37 @@ export default function Layout({
 
   const handleLogout = async () => {
     if (emailUser) {
-      logoutEmail();
+      await logoutEmail();
     } else {
       clear();
     }
     queryClient.clear();
     onLogout();
+  };
+
+  const handleGenerateInvite = async () => {
+    setIsGeneratingInvite(true);
+    try {
+      const token = await generateInvite();
+      const url = `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(token)}`;
+      setInviteUrl(url);
+      setShowInviteDialog(true);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to generate invite",
+      );
+    } finally {
+      setIsGeneratingInvite(false);
+    }
+  };
+
+  const handleCopyInvite = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      toast.success("Invite link copied to clipboard!");
+    } catch {
+      toast.error("Failed to copy — please copy manually");
+    }
   };
 
   const renderPage = () => {
@@ -148,6 +190,8 @@ export default function Layout({
         return <DomainsPage />;
       case "activity-log":
         return <ActivityLogPage />;
+      case "error-log":
+        return <ErrorLogPage />;
       case "clicks":
         return <ClicksLogPage />;
       case "conversions":
@@ -230,12 +274,16 @@ export default function Layout({
               <button
                 type="button"
                 key={item.id}
+                data-ocid={`nav.${item.id}.link`}
                 onClick={() => setCurrentPage(item.id as Page)}
                 className={cn(
                   "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm font-medium transition-colors",
                   isActive
                     ? "bg-sidebar-accent text-sidebar-foreground"
                     : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50",
+                  item.id === "error-log"
+                    ? "text-destructive/60 hover:text-destructive"
+                    : "",
                   collapsed && "justify-center px-2",
                 )}
                 title={collapsed ? item.label : undefined}
@@ -244,6 +292,9 @@ export default function Layout({
                   className={cn(
                     "shrink-0",
                     isActive ? "text-primary" : "",
+                    item.id === "error-log" && isActive
+                      ? "text-destructive"
+                      : "",
                     "w-4 h-4",
                   )}
                 />
@@ -260,6 +311,7 @@ export default function Layout({
         <div className="px-2 pb-2">
           <button
             type="button"
+            data-ocid="nav.collapse.toggle"
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
               "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-xs text-sidebar-foreground/40 hover:text-sidebar-foreground/60 hover:bg-sidebar-accent/50 transition-colors",
@@ -291,6 +343,7 @@ export default function Layout({
           <div className="flex items-center gap-3">
             <button
               type="button"
+              data-ocid="header.secondary_button"
               onClick={() => queryClient.invalidateQueries()}
               className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               title="Refresh data"
@@ -304,6 +357,7 @@ export default function Layout({
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
+                    data-ocid="header.dropdown_menu"
                     className="flex items-center gap-2 rounded-md p-1.5 hover:bg-accent transition-colors"
                   >
                     <Avatar className="w-7 h-7">
@@ -318,7 +372,7 @@ export default function Layout({
                     )}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-52">
                   <div className="px-2 py-1.5 text-xs text-muted-foreground">
                     Signed in as
                   </div>
@@ -326,7 +380,24 @@ export default function Layout({
                     {authLabel}
                   </div>
                   <Separator className="my-1" />
+                  {/* Only show invite option for email-authenticated users */}
+                  {emailUser && (
+                    <DropdownMenuItem
+                      data-ocid="header.invite.button"
+                      onClick={handleGenerateInvite}
+                      disabled={isGeneratingInvite}
+                      className="gap-2"
+                    >
+                      {isGeneratingInvite ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Link2 className="w-4 h-4" />
+                      )}
+                      Generate Invite Link
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
+                    data-ocid="header.reports.button"
                     onClick={() => setCurrentPage("reports")}
                     className="gap-2"
                   >
@@ -334,6 +405,7 @@ export default function Layout({
                     Reports
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    data-ocid="header.logout.button"
                     onClick={handleLogout}
                     className="gap-2 text-destructive focus:text-destructive"
                   >
@@ -347,6 +419,7 @@ export default function Layout({
               <Button
                 variant="outline"
                 size="sm"
+                data-ocid="header.login.button"
                 onClick={() => setShowLoginModal(true)}
                 className="gap-1.5"
               >
@@ -385,6 +458,82 @@ export default function Layout({
               compact
               onLoginSuccess={() => setShowLoginModal(false)}
             />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite Link Dialog */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent className="max-w-lg" data-ocid="invite.dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-primary" />
+              Invite Link Generated
+            </DialogTitle>
+            <DialogDescription>
+              Share this link with the person you want to invite. It can only be
+              used once and expires after use.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label
+                htmlFor="invite-url-input"
+                className="text-sm font-medium text-foreground"
+              >
+                Invite URL
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id="invite-url-input"
+                  data-ocid="invite.input"
+                  value={inviteUrl}
+                  readOnly
+                  className="font-mono text-xs bg-muted"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  data-ocid="invite.copy.button"
+                  onClick={handleCopyInvite}
+                  title="Copy to clipboard"
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+              <p className="text-xs font-medium text-foreground">
+                How it works:
+              </p>
+              <ul className="text-xs text-muted-foreground space-y-0.5 list-disc list-inside">
+                <li>Send this link to the new user</li>
+                <li>They open the link and register with their email</li>
+                <li>The invite token is automatically pre-filled</li>
+                <li>Once used, the invite is invalidated</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                data-ocid="invite.close_button"
+                onClick={() => setShowInviteDialog(false)}
+              >
+                Close
+              </Button>
+              <Button
+                data-ocid="invite.open_button"
+                onClick={() => window.open(inviteUrl, "_blank")}
+                className="gap-1.5"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open Link
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
