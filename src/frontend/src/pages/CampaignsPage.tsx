@@ -569,7 +569,7 @@ function CampaignForm({ open, onClose, editingCampaign }: CampaignFormProps) {
     editingCampaign?.status ?? CampaignStatus.active,
   );
   const [trackingDomain, setTrackingDomain] = useState(
-    editingCampaign?.trackingDomain ?? "",
+    editingCampaign?.trackingDomain || "__default__",
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -590,7 +590,8 @@ function CampaignForm({ open, onClose, editingCampaign }: CampaignFormProps) {
           name: name.trim(),
           trafficSourceId,
           status,
-          trackingDomain: trackingDomain.trim(),
+          trackingDomain:
+            trackingDomain === "__default__" ? "" : trackingDomain.trim(),
         });
         toast.success("Campaign updated");
       } else {
@@ -598,7 +599,8 @@ function CampaignForm({ open, onClose, editingCampaign }: CampaignFormProps) {
           name: name.trim(),
           trafficSourceId,
           status,
-          trackingDomain: trackingDomain.trim(),
+          trackingDomain:
+            trackingDomain === "__default__" ? "" : trackingDomain.trim(),
         });
         toast.success("Campaign created — add streams to enable redirects");
       }
@@ -677,7 +679,9 @@ function CampaignForm({ open, onClose, editingCampaign }: CampaignFormProps) {
                   <SelectValue placeholder="Select campaign domain (optional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Default (app domain)</SelectItem>
+                  <SelectItem value="__default__">
+                    Default (app domain)
+                  </SelectItem>
                   {campaignDomains.map((d) => (
                     <SelectItem key={d.id} value={d.name}>
                       {d.name}
