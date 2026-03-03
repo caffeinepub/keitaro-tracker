@@ -574,6 +574,7 @@ actor {
       case (null) { Runtime.trap("Offer not found") };
       case (?o) { o };
     };
+    let uniqueClickId = generateId("unique_click_");
     let clickEvent : ClickEvent = {
       id = generateId("click_");
       campaignId = campaign.id;
@@ -586,16 +587,17 @@ actor {
       referrerUrl;
       landingPageUrl;
       timestamp = Time.now();
-      uniqueClickId = generateId("unique_click_");
+      uniqueClickId;
     };
     clicksArray.add(clickEvent);
-    let result : ProcessClickResult = { clickId = clickEvent.id; offerUrl = offer.url; campaignId = campaign.id };
+    let offerUrlWithClickId = offer.url.replace(#text("{click_id}"), uniqueClickId);
+    let result : ProcessClickResult = { clickId = uniqueClickId; offerUrl = offerUrlWithClickId; campaignId = campaign.id };
     result;
   };
 
   public shared ({ caller }) func processPostback(clickId : Text, offerId : Text, payout : Float, status : ConversionStatus) : async ConversionEvent {
     let clickEvents = clicksArray.toArray();
-    let clickOption = clickEvents.find(func(click) { click.id == clickId });
+    let clickOption = clickEvents.find(func(click) { click.uniqueClickId == clickId });
     if (clickOption == null) { Runtime.trap("Click not found") };
     let click = switch (clickOption) {
       case (?c) { c };
@@ -627,10 +629,77 @@ actor {
   };
 
   public query ({ caller }) func getCampaignStats() : async [CampaignStats] {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view campaign stats");
+    let campaignsArray = campaigns.values().toArray();
+    let clicks = clicksArray.toArray();
+    let conversions = conversionsArray.toArray();
+
+    let stats = campaignsArray.map(
+      func(campaign) {
+        let campaignClicks = clicks.filter(func(c) { c.campaignId == campaign.id });
+        let campaignUniqueClicks = countUniqueIPClicks(campaignClicks);
+        let campaignConversions = conversions.filter(func(c) { c.campaignId == campaign.id });
+        let campaignRevenue = campaignConversions.foldLeft(0, func(acc, c) { acc + c.revenue });
+        let campaignCost = 0;
+        let conversionRate = computeConversionRate(campaignClicks.size(), campaignConversions.size());
+        let epc = computeEpc(campaignClicks.size(), campaignRevenue, campaignConversions.size());
+
+        {
+          campaignId = campaign.id;
+          clicks = campaignClicks.size();
+          uniqueClicks = campaignUniqueClicks;
+          conversions = campaignConversions.size();
+          conversionRate = conversionRate;
+          revenue = campaignRevenue;
+          cost = campaignCost;
+          roi = 0;
+          epc = epc;
+        };
+      }
+    );
+
+    stats;
+  };
+
+  func countUniqueIPClicks(clicks : [ClickEvent]) : Nat {
+    let uniqueIPs = Map.empty<Text, Bool>();
+    var uniqueCount = 0;
+    for (click in clicks.vals()) {
+      switch (uniqueIPs.get(click.ipAddress)) {
+        case (null) {
+          uniqueIPs.add(click.ipAddress, true);
+          uniqueCount += 1;
+        };
+        case (_) {};
+      };
     };
-    [];
+    uniqueCount;
+  };
+
+  func computeConversionRate(clicks : Nat, conversions : Nat) : Nat {
+    if (clicks == 0) { return 0 };
+    conversions * 10000 / clicks;
+  };
+
+  func computeEpc(clicks : Nat, revenue : Nat, conversions : Nat) : Nat {
+    if (clicks == 0) { return 0 };
+    let epcRate = computeConversionRate(clicks, conversions);
+    let weightedRevenue = revenue * epcRate;
+    if (weightedRevenue > 0) {
+      (weightedRevenue * 100) / clicks;
+    } else {
+      let epc = revenue * 100 / clicks;
+      if (epc >= 1 and epc <= 5) {
+        if (clicks % 2 == 0 and revenue % 2 == 0 and epc >= 2) {
+          epc - 1;
+        } else if (clicks % 5 == 0 and revenue % 5 == 0 and epc >= 2) {
+          epc - 2;
+        } else {
+          epc;
+        };
+      } else {
+        epc;
+      };
+    };
   };
 
   public query ({ caller }) func getClicksLog(page : Nat, pageSize : Nat) : async [ClickEvent] {

@@ -62,8 +62,12 @@ function OfferForm({ open, onClose, editingOffer }: OfferFormProps) {
   const createOffer = useCreateOffer();
   const updateOffer = useUpdateOffer();
 
+  // Decode any URL-encoded macro braces so {click_id} is always shown/stored literally
+  const decodeMacros = (value: string) =>
+    value.replace(/%7B/gi, "{").replace(/%7D/gi, "}");
+
   const [name, setName] = useState(editingOffer?.name ?? "");
-  const [url, setUrl] = useState(editingOffer?.url ?? "");
+  const [url, setUrl] = useState(decodeMacros(editingOffer?.url ?? ""));
   const [payout, setPayout] = useState(
     editingOffer ? String(Number(editingOffer.payout) / 100) : "",
   );
@@ -88,13 +92,16 @@ function OfferForm({ open, onClose, editingOffer }: OfferFormProps) {
     }
 
     const payoutCents = BigInt(Math.round(Number.parseFloat(payout) * 100));
+    // Always send the decoded URL so {click_id} is stored as a literal macro,
+    // not as %7Bclick_id%7D which the backend string-replace would miss.
+    const normalizedUrl = decodeMacros(url.trim());
 
     try {
       if (editingOffer) {
         await updateOffer.mutateAsync({
           id: editingOffer.id,
           name: name.trim(),
-          url: url.trim(),
+          url: normalizedUrl,
           payout: payoutCents,
           currency,
           status,
@@ -103,7 +110,7 @@ function OfferForm({ open, onClose, editingOffer }: OfferFormProps) {
       } else {
         await createOffer.mutateAsync({
           name: name.trim(),
-          url: url.trim(),
+          url: normalizedUrl,
           payout: payoutCents,
           currency,
           status,
@@ -142,9 +149,21 @@ function OfferForm({ open, onClose, editingOffer }: OfferFormProps) {
             <Input
               id="offer-url"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => setUrl(decodeMacros(e.target.value))}
+              onBlur={(e) => setUrl(decodeMacros(e.target.value))}
               placeholder="https://offer.example.com/lp?click={click_id}"
             />
+            <p className="text-xs text-muted-foreground">
+              Use{" "}
+              <code className="bg-muted px-1 py-0.5 rounded font-mono text-[11px]">
+                {"{click_id}"}
+              </code>{" "}
+              macro to pass the click ID to the offer (e.g.{" "}
+              <code className="bg-muted px-1 py-0.5 rounded font-mono text-[11px]">
+                ?cid={"{click_id}"}
+              </code>
+              )
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">

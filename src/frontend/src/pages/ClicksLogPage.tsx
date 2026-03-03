@@ -9,7 +9,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ChevronLeft, ChevronRight, MousePointerClick } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  MousePointerClick,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { useGetAllCampaigns, useGetClicksLog } from "../hooks/useQueries";
@@ -26,6 +32,43 @@ function formatTime(ts: bigint): string {
     second: "2-digit",
     hour12: false,
   });
+}
+
+function ClickIdCell({ uniqueClickId }: { uniqueClickId: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(uniqueClickId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-1 group">
+      <span
+        className="truncate font-mono text-xs text-primary max-w-[100px] block"
+        title={uniqueClickId}
+      >
+        {uniqueClickId.length > 14
+          ? `${uniqueClickId.slice(0, 14)}…`
+          : uniqueClickId}
+      </span>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-primary shrink-0"
+        title={copied ? "Copied!" : `Copy: ${uniqueClickId}`}
+        data-ocid="clicks.copy_button"
+      >
+        {copied ? (
+          <Check className="w-3 h-3 text-success" />
+        ) : (
+          <Copy className="w-3 h-3" />
+        )}
+      </button>
+    </div>
+  );
 }
 
 function DeviceBadge({ type }: { type: string }) {
@@ -163,13 +206,8 @@ export default function ClicksLogPage() {
                       <TableCell className="pl-5 font-mono text-xs whitespace-nowrap text-muted-foreground">
                         {formatTime(click.timestamp)}
                       </TableCell>
-                      <TableCell className="max-w-[120px]">
-                        <span
-                          className="truncate block font-mono text-xs text-primary"
-                          title={click.id}
-                        >
-                          {click.id.slice(0, 12)}…
-                        </span>
+                      <TableCell className="max-w-[160px]">
+                        <ClickIdCell uniqueClickId={click.uniqueClickId} />
                       </TableCell>
                       <TableCell className="text-sm max-w-[120px]">
                         <span className="truncate block">

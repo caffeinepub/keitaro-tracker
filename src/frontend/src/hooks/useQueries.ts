@@ -512,6 +512,7 @@ export function useGetCampaignStats() {
       return actor.getCampaignStats();
     },
     enabled: !!actor && !isFetching,
+    refetchInterval: 30000,
   });
 }
 

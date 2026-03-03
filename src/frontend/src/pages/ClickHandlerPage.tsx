@@ -26,7 +26,13 @@ export default function ClickHandlerPage({
           document.referrer || "",
           window.location.href,
         );
-        window.location.replace(result.offerUrl);
+        // Apply client-side safety substitution in case the URL was stored
+        // with URL-encoded braces (%7B/%7D) that the backend couldn't replace.
+        const clickId = result.clickId ?? "";
+        const finalUrl = result.offerUrl
+          .replace(/%7Bclick_id%7D/gi, clickId)
+          .replace(/\{click_id\}/gi, clickId);
+        window.location.replace(finalUrl);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setErrorMessage(msg);
